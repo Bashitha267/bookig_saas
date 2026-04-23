@@ -1,5 +1,5 @@
 const bcrypt = require('bcryptjs');
-const prisma = require('../../lib/prisma');
+
 
 async function createAdmin(req, res) {
   const { firstName, lastName, username, nicNumber, contact, whatsapp, address, password } = req.body;
@@ -11,25 +11,17 @@ async function createAdmin(req, res) {
   }
 
   try {
-    const existing = await prisma.user.findFirst({ where: { OR: [{ contact }, { username }] } });
-    if (existing) {
+    const existing = await db.query('SELECT id FROM `User` WHERE contact = ? OR username = ? LIMIT 1', [contact, username]);
+    if (existing && existing.length > 0) {
       return res.status(409).json({ message: 'Contact number or username already registered' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newAdmin = await prisma.user.create({
-      data: {
-        firstName,
-        lastName,
-        username,
-        nicNumber,
-        contact,
-        whatsapp,
-        address,
-        password: hashedPassword,
-        role: 'admin',
-      },
-    });
+    const result = await db.execute(
+      'INSERT INTO `User` (firstName,lastName,username,nicNumber,contact,whatsapp,address,password,role,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,NOW(),NOW())',
+      [firstName, lastName, username, nicNumber || null, contact, whatsapp, address, hashedPassword, 'admin']
+    );
+    const newAdmin = { id: result.insertId, username, firstName, lastName, role: 'admin' };
 
     return res.status(201).json({
       message: 'Admin created successfully',

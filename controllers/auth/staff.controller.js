@@ -1,5 +1,5 @@
 const bcrypt = require('bcryptjs');
-const prisma = require('../../lib/prisma');
+const db = require('../../lib/db');
 
 async function registerStaff(req, res) {
   const { firstName, lastName, username, nicNumber, contact, whatsapp, address, password } = req.body;
@@ -11,31 +11,24 @@ async function registerStaff(req, res) {
   }
 
   try {
-    const owner = await prisma.user.findUnique({ where: { id: req.user.userId } });
+    const ownerRows = await db.query('SELECT * FROM `User` WHERE id = ? LIMIT 1', [req.user.userId]);
+    const owner = ownerRows && ownerRows.length ? ownerRows[0] : null;
     if (!owner || owner.role !== 'owner') {
       return res.status(403).json({ message: 'Only owner can register staff' });
     }
 
-    const existing = await prisma.user.findFirst({ where: { OR: [{ contact }, { username }] } });
-    if (existing) {
+    const existing = await db.query('SELECT id FROM `User` WHERE contact = ? OR username = ? LIMIT 1', [contact, username]);
+    if (existing && existing.length > 0) {
       return res.status(409).json({ message: 'Contact number or username already registered' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const staff = await prisma.user.create({
-      data: {
-        firstName,
-        lastName,
-        username,
-        nicNumber,
-        contact,
-        whatsapp,
-        address,
-        password: hashedPassword,
-        role: 'staff',
-        ownerId: owner.id,
-      },
-    });
+    const result = await db.execute(
+      'INSERT INTO `User` (firstName,lastName,username,nicNumber,contact,whatsapp,address,password,role,ownerId,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,NOW(),NOW())',
+      [firstName, lastName, username, nicNumber || null, contact, whatsapp, address, hashedPassword, 'staff', owner.id]
+    );
+    const staffId = result.insertId;
+    const staff = { id: staffId, firstName, lastName, username, role: 'staff', ownerId: owner.id };
 
     return res.status(201).json({
       message: 'Staff registered successfully',
