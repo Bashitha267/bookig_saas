@@ -7,6 +7,15 @@
     "dev": "nodemon index.js",
     "start": "node index.js"
   },
+  "prisma": {
+    "schema": "./prisma/schema.prisma"
+  },
+  "scripts": {
+    "prisma:migrate": "prisma migrate dev --name add-username",
+    "prisma:generate": "prisma generate",
+    "dev": "nodemon index.js",
+    "start": "node index.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

@@ -6,7 +6,7 @@ Postman test instructions
 
 2. Login (Owner)
 - POST http://localhost:5000/auth/login
-- Body (JSON): see `test_payloads/auth_login.json`
+- Body (JSON): use `username` and `password` (see `test_payloads/all_payloads.json`)
 - Response contains `token` — copy it for next steps.
 
 3. Register Staff (as Owner)

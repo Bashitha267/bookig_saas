@@ -1,0 +1,36 @@
+{
+  "auth_register_owner": {
+    "firstName": "John",
+    "lastName": "Doe",
+    "username": "johndoe",
+    "nicNumber": "123456789V",
+    "contact": "0771234567",
+    "whatsapp": "0771234567",
+    "address": "123 Villa Road",
+    "password": "OwnerPass123!"
+  },
+  "auth_login": {
+    "username": "johndoe",
+    "password": "OwnerPass123!"
+  },
+  "staff_register": {
+    "firstName": "Alice",
+    "lastName": "Smith",
+    "username": "alicestaff",
+    "nicNumber": "987654321V",
+    "contact": "0777654321",
+    "whatsapp": "0777654321",
+    "address": "Villa Staff House",
+    "password": "StaffPass123!"
+  },
+  "admin_create": {
+    "firstName": "Super",
+    "lastName": "Admin",
+    "username": "superadmin",
+    "nicNumber": "",
+    "contact": "0710000000",
+    "whatsapp": "0710000000",
+    "address": "Head Office",
+    "password": "AdminPass123!"
+  }
+}

@@ -3,13 +3,13 @@ const jwt = require('jsonwebtoken');
 const prisma = require('../../lib/prisma');
 
 function validateBaseFields(body) {
-  const required = ['firstName', 'lastName', 'contact', 'whatsapp', 'address', 'password'];
+  const required = ['firstName', 'lastName', 'username', 'contact', 'whatsapp', 'address', 'password'];
   const missing = required.filter((key) => !body[key]);
   return missing;
 }
 
 async function registerOwner(req, res) {
-  const { firstName, lastName, nicNumber, contact, whatsapp, address, password } = req.body;
+  const { firstName, lastName, username, nicNumber, contact, whatsapp, address, password } = req.body;
 
   const missing = validateBaseFields(req.body);
   if (missing.length > 0) {
@@ -17,9 +17,9 @@ async function registerOwner(req, res) {
   }
 
   try {
-    const existing = await prisma.user.findFirst({ where: { contact } });
+    const existing = await prisma.user.findFirst({ where: { OR: [{ contact }, { username }] } });
     if (existing) {
-      return res.status(409).json({ message: 'Contact number already registered' });
+      return res.status(409).json({ message: 'Contact number or username already registered' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -27,6 +27,7 @@ async function registerOwner(req, res) {
       data: {
         firstName,
         lastName,
+        username,
         nicNumber,
         contact,
         whatsapp,
@@ -40,6 +41,7 @@ async function registerOwner(req, res) {
       message: 'Owner registered successfully',
       user: {
         id: user.id,
+        username: user.username,
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
@@ -51,14 +53,14 @@ async function registerOwner(req, res) {
 }
 
 async function login(req, res) {
-  const { contact, password } = req.body;
+  const { username, password } = req.body;
 
-  if (!contact || !password) {
-    return res.status(400).json({ message: 'contact and password are required' });
+  if (!username || !password) {
+    return res.status(400).json({ message: 'username and password are required' });
   }
 
   try {
-    const user = await prisma.user.findFirst({ where: { contact } });
+    const user = await prisma.user.findFirst({ where: { username } });
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
@@ -69,7 +71,7 @@ async function login(req, res) {
     }
 
     const token = jwt.sign(
-      { userId: user.id, role: user.role },
+      { userId: user.id, username: user.username, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: '1d' }
     );
@@ -79,6 +81,7 @@ async function login(req, res) {
       token,
       user: {
         id: user.id,
+        username: user.username,
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,

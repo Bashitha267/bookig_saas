@@ -2,9 +2,9 @@ const bcrypt = require('bcryptjs');
 const prisma = require('../../lib/prisma');
 
 async function registerStaff(req, res) {
-  const { firstName, lastName, nicNumber, contact, whatsapp, address, password } = req.body;
+  const { firstName, lastName, username, nicNumber, contact, whatsapp, address, password } = req.body;
 
-  const required = ['firstName', 'lastName', 'contact', 'whatsapp', 'address', 'password'];
+  const required = ['firstName', 'lastName', 'username', 'contact', 'whatsapp', 'address', 'password'];
   const missing = required.filter((key) => !req.body[key]);
   if (missing.length > 0) {
     return res.status(400).json({ message: `Missing fields: ${missing.join(', ')}` });
@@ -16,9 +16,9 @@ async function registerStaff(req, res) {
       return res.status(403).json({ message: 'Only owner can register staff' });
     }
 
-    const existing = await prisma.user.findFirst({ where: { contact } });
+    const existing = await prisma.user.findFirst({ where: { OR: [{ contact }, { username }] } });
     if (existing) {
-      return res.status(409).json({ message: 'Contact number already registered' });
+      return res.status(409).json({ message: 'Contact number or username already registered' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -26,6 +26,7 @@ async function registerStaff(req, res) {
       data: {
         firstName,
         lastName,
+        username,
         nicNumber,
         contact,
         whatsapp,
@@ -40,6 +41,7 @@ async function registerStaff(req, res) {
       message: 'Staff registered successfully',
       staff: {
         id: staff.id,
+        username: staff.username,
         firstName: staff.firstName,
         lastName: staff.lastName,
         role: staff.role,
