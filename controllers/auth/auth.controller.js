@@ -17,14 +17,14 @@ async function registerOwner(req, res) {
   }
 
   try {
-    const existing = await db.query('SELECT id FROM `User` WHERE contact = ? OR username = ? LIMIT 1', [contact, username]);
+    const existing = await db.query('SELECT id FROM `user` WHERE contact = ? OR username = ? LIMIT 1', [contact, username]);
     if (existing && existing.length > 0) {
       return res.status(409).json({ message: 'Contact number or username already registered' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await db.execute(
-      'INSERT INTO `User` (firstName,lastName,username,nicNumber,contact,whatsapp,address,password,role,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,NOW(),NOW())',
+      'INSERT INTO `user` (firstName,lastName,username,nicNumber,contact,whatsapp,address,password,role,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,NOW(),NOW())',
       [firstName, lastName, username, nicNumber || null, contact, whatsapp, address, hashedPassword, 'owner']
     );
     const userId = result.insertId;
@@ -53,7 +53,7 @@ async function login(req, res) {
   }
 
   try {
-    const rows = await db.query('SELECT * FROM `User` WHERE username = ? LIMIT 1', [username]);
+    const rows = await db.query('SELECT * FROM `user` WHERE username = ? LIMIT 1', [username]);
     const user = rows && rows.length ? rows[0] : null;
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });

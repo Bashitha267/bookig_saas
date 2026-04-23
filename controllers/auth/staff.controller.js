@@ -11,20 +11,20 @@ async function registerStaff(req, res) {
   }
 
   try {
-    const ownerRows = await db.query('SELECT * FROM `User` WHERE id = ? LIMIT 1', [req.user.userId]);
+    const ownerRows = await db.query('SELECT * FROM `user` WHERE id = ? LIMIT 1', [req.user.userId]);
     const owner = ownerRows && ownerRows.length ? ownerRows[0] : null;
     if (!owner || owner.role !== 'owner') {
       return res.status(403).json({ message: 'Only owner can register staff' });
     }
 
-    const existing = await db.query('SELECT id FROM `User` WHERE contact = ? OR username = ? LIMIT 1', [contact, username]);
+    const existing = await db.query('SELECT id FROM `user` WHERE contact = ? OR username = ? LIMIT 1', [contact, username]);
     if (existing && existing.length > 0) {
       return res.status(409).json({ message: 'Contact number or username already registered' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await db.execute(
-      'INSERT INTO `User` (firstName,lastName,username,nicNumber,contact,whatsapp,address,password,role,ownerId,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,NOW(),NOW())',
+      'INSERT INTO `user` (firstName,lastName,username,nicNumber,contact,whatsapp,address,password,role,ownerId,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,NOW(),NOW())',
       [firstName, lastName, username, nicNumber || null, contact, whatsapp, address, hashedPassword, 'staff', owner.id]
     );
     const staffId = result.insertId;
