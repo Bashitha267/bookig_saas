@@ -15,16 +15,26 @@ function buildUpdate(fields, body) {
 
 async function listPayments(req, res) {
   try {
-    const { ownerId } = await resolveOwnerContext(req);
+    const { ownerId, role, propertyId } = await resolveOwnerContext(req);
+    const requestedPropertyId = req.query.propertyId ? Number(req.query.propertyId) : null;
+    const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId || propertyId;
     let sql = `
       SELECT p.*, b.guestName, b.roomId
       FROM payment p
       LEFT JOIN booking b ON p.bookingId = b.id
+      LEFT JOIN room r ON b.roomId = r.id
     `;
     const params = [];
     if (ownerId) {
       sql += ' WHERE p.ownerId = ?';
       params.push(ownerId);
+      if (scopePropertyId) {
+        sql += ' AND r.propertyId = ?';
+        params.push(scopePropertyId);
+      }
+    } else if (scopePropertyId) {
+      sql += ' WHERE r.propertyId = ?';
+      params.push(scopePropertyId);
     }
     sql += ' ORDER BY p.id DESC';
     const rows = await db.query(sql, params);
@@ -37,17 +47,27 @@ async function listPayments(req, res) {
 async function getPayment(req, res) {
   const { id } = req.params;
   try {
-    const { ownerId } = await resolveOwnerContext(req);
+    const { ownerId, role, propertyId } = await resolveOwnerContext(req);
+    const requestedPropertyId = req.query.propertyId ? Number(req.query.propertyId) : null;
+    const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId || propertyId;
     let sql = `
       SELECT p.*, b.guestName, b.roomId
       FROM payment p
       LEFT JOIN booking b ON p.bookingId = b.id
+      LEFT JOIN room r ON b.roomId = r.id
       WHERE p.id = ?
     `;
     const params = [id];
     if (ownerId) {
       sql += ' AND p.ownerId = ?';
       params.push(ownerId);
+      if (scopePropertyId) {
+        sql += ' AND r.propertyId = ?';
+        params.push(scopePropertyId);
+      }
+    } else if (scopePropertyId) {
+      sql += ' AND r.propertyId = ?';
+      params.push(scopePropertyId);
     }
     const rows = await db.query(sql, params);
     if (!rows.length) {

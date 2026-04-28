@@ -2,9 +2,9 @@ const bcrypt = require('bcryptjs');
 const db = require('../../lib/db');
 
 async function registerStaff(req, res) {
-  const { firstName, lastName, username, nicNumber, contact, whatsapp, address, password } = req.body;
+  const { firstName, lastName, username, nicNumber, contact, whatsapp, address, password, propertyId } = req.body;
 
-  const required = ['firstName', 'lastName', 'username', 'contact', 'whatsapp', 'address', 'password'];
+  const required = ['firstName', 'lastName', 'username', 'contact', 'whatsapp', 'address', 'password', 'propertyId'];
   const missing = required.filter((key) => !req.body[key]);
   if (missing.length > 0) {
     return res.status(400).json({ message: `Missing fields: ${missing.join(', ')}` });
@@ -22,10 +22,15 @@ async function registerStaff(req, res) {
       return res.status(409).json({ message: 'Contact number or username already registered' });
     }
 
+    const propertyRows = await db.query('SELECT id FROM property WHERE id = ? AND ownerId = ? LIMIT 1', [propertyId, owner.id]);
+    if (!propertyRows.length) {
+      return res.status(404).json({ message: 'Property not found for owner' });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await db.execute(
-      'INSERT INTO `user` (firstName,lastName,username,nicNumber,contact,whatsapp,address,password,role,ownerId,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,NOW(),NOW())',
-      [firstName, lastName, username, nicNumber || null, contact, whatsapp, address, hashedPassword, 'staff', owner.id]
+      'INSERT INTO `user` (firstName,lastName,username,nicNumber,contact,whatsapp,address,password,role,ownerId,propertyId,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())',
+      [firstName, lastName, username, nicNumber || null, contact, whatsapp, address, hashedPassword, 'staff', owner.id, propertyId]
     );
     const staffId = result.insertId;
     const staff = { id: staffId, firstName, lastName, username, role: 'staff', ownerId: owner.id };

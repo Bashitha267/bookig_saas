@@ -15,7 +15,9 @@ function buildUpdate(fields, body) {
 
 async function listBookings(req, res) {
   try {
-    const { ownerId } = await resolveOwnerContext(req);
+    const { ownerId, role, propertyId } = await resolveOwnerContext(req);
+    const requestedPropertyId = req.query.propertyId ? Number(req.query.propertyId) : null;
+    const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId || propertyId;
     let sql = `
       SELECT b.*, r.roomNumber, r.roomType, p.name AS propertyName
       FROM booking b
@@ -26,6 +28,13 @@ async function listBookings(req, res) {
     if (ownerId) {
       sql += ' WHERE b.ownerId = ?';
       params.push(ownerId);
+      if (scopePropertyId) {
+        sql += ' AND r.propertyId = ?';
+        params.push(scopePropertyId);
+      }
+    } else if (scopePropertyId) {
+      sql += ' WHERE r.propertyId = ?';
+      params.push(scopePropertyId);
     }
     sql += ' ORDER BY b.id DESC';
     const rows = await db.query(sql, params);
@@ -38,7 +47,9 @@ async function listBookings(req, res) {
 async function getBooking(req, res) {
   const { id } = req.params;
   try {
-    const { ownerId } = await resolveOwnerContext(req);
+    const { ownerId, role, propertyId } = await resolveOwnerContext(req);
+    const requestedPropertyId = req.query.propertyId ? Number(req.query.propertyId) : null;
+    const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId || propertyId;
     let sql = `
       SELECT b.*, r.roomNumber, r.roomType, p.name AS propertyName
       FROM booking b
@@ -50,6 +61,13 @@ async function getBooking(req, res) {
     if (ownerId) {
       sql += ' AND b.ownerId = ?';
       params.push(ownerId);
+      if (scopePropertyId) {
+        sql += ' AND r.propertyId = ?';
+        params.push(scopePropertyId);
+      }
+    } else if (scopePropertyId) {
+      sql += ' AND r.propertyId = ?';
+      params.push(scopePropertyId);
     }
     const rows = await db.query(sql, params);
     if (!rows.length) {
@@ -80,14 +98,17 @@ async function createBooking(req, res) {
   }
 
   try {
-    const { ownerId, role } = await resolveOwnerContext(req);
-    const roomRows = await db.query('SELECT id, ownerId FROM room WHERE id = ? LIMIT 1', [roomId]);
+    const { ownerId, role, propertyId } = await resolveOwnerContext(req);
+    const roomRows = await db.query('SELECT id, ownerId, propertyId FROM room WHERE id = ? LIMIT 1', [roomId]);
     const room = roomRows.length ? roomRows[0] : null;
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
     }
     if (ownerId && room.ownerId !== ownerId) {
       return res.status(403).json({ message: 'Room does not belong to your hotel' });
+    }
+    if (propertyId && room.propertyId !== propertyId) {
+      return res.status(403).json({ message: 'Room does not belong to your property' });
     }
 
     const insertOwnerId = role === 'admin' ? room.ownerId : ownerId;
@@ -124,7 +145,7 @@ async function createBooking(req, res) {
 async function updateBooking(req, res) {
   const { id } = req.params;
   try {
-    const { ownerId, role } = await resolveOwnerContext(req);
+    const { ownerId, role, propertyId } = await resolveOwnerContext(req);
     const rows = await db.query('SELECT id, ownerId FROM booking WHERE id = ? LIMIT 1', [id]);
     const booking = rows.length ? rows[0] : null;
     if (!booking) {
@@ -135,13 +156,16 @@ async function updateBooking(req, res) {
     }
 
     if (Object.prototype.hasOwnProperty.call(req.body, 'roomId')) {
-      const roomRows = await db.query('SELECT id, ownerId FROM room WHERE id = ? LIMIT 1', [req.body.roomId]);
+      const roomRows = await db.query('SELECT id, ownerId, propertyId FROM room WHERE id = ? LIMIT 1', [req.body.roomId]);
       const room = roomRows.length ? roomRows[0] : null;
       if (!room) {
         return res.status(404).json({ message: 'Room not found' });
       }
       if (ownerId && room.ownerId !== ownerId) {
         return res.status(403).json({ message: 'Room does not belong to your hotel' });
+      }
+      if (propertyId && room.propertyId !== propertyId) {
+        return res.status(403).json({ message: 'Room does not belong to your property' });
       }
       if (role === 'admin' && booking.ownerId !== room.ownerId) {
         return res.status(400).json({ message: 'Room owner must match booking owner' });

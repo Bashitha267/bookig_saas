@@ -9,11 +9,30 @@ function validateBaseFields(body) {
 }
 
 async function registerOwner(req, res) {
-  const { firstName, lastName, username, nicNumber, contact, whatsapp, address, password } = req.body;
+  const {
+    firstName,
+    lastName,
+    username,
+    nicNumber,
+    contact,
+    whatsapp,
+    address,
+    password,
+    propertyName,
+    propertyAddress,
+    propertyCity,
+    propertyCountry,
+    propertyPhone,
+    propertyEmail,
+  } = req.body;
 
   const missing = validateBaseFields(req.body);
   if (missing.length > 0) {
     return res.status(400).json({ message: `Missing fields: ${missing.join(', ')}` });
+  }
+
+  if (!propertyName || !propertyAddress || !propertyPhone) {
+    return res.status(400).json({ message: 'propertyName, propertyAddress, propertyPhone are required' });
   }
 
   try {
@@ -23,11 +42,29 @@ async function registerOwner(req, res) {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const result = await db.execute(
+    const userResult = await db.execute(
       'INSERT INTO `user` (firstName,lastName,username,nicNumber,contact,whatsapp,address,password,role,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,NOW(),NOW())',
       [firstName, lastName, username, nicNumber || null, contact, whatsapp, address, hashedPassword, 'owner']
     );
-    const userId = result.insertId;
+    const userId = userResult.insertId;
+
+    const propertyResult = await db.execute(
+      `INSERT INTO property
+        (ownerId, name, address, city, country, phone, email, createdAt, updatedAt)
+       VALUES (?,?,?,?,?,?,?,NOW(),NOW())`,
+      [
+        userId,
+        propertyName,
+        propertyAddress,
+        propertyCity || null,
+        propertyCountry || null,
+        propertyPhone,
+        propertyEmail || null,
+      ]
+    );
+
+    const propertyId = propertyResult.insertId;
+    await db.execute('UPDATE `user` SET currentPropertyId = ? WHERE id = ?', [propertyId, userId]);
     const user = { id: userId, firstName, lastName, username, role: 'owner' };
 
     return res.status(201).json({
@@ -38,6 +75,16 @@ async function registerOwner(req, res) {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
+        currentPropertyId: propertyId,
+      },
+      property: {
+        id: propertyId,
+        name: propertyName,
+        address: propertyAddress,
+        city: propertyCity || null,
+        country: propertyCountry || null,
+        phone: propertyPhone,
+        email: propertyEmail || null,
       },
     });
   } catch (error) {
@@ -79,10 +126,37 @@ async function login(req, res) {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
+        propertyId: user.propertyId || null,
+        currentPropertyId: user.currentPropertyId || null,
       },
     });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to login', error: error.message });
+  }
+}
+
+async function setCurrentProperty(req, res) {
+  const { propertyId } = req.body;
+  if (!propertyId) {
+    return res.status(400).json({ message: 'propertyId is required' });
+  }
+
+  try {
+    const rows = await db.query('SELECT id, role FROM `user` WHERE id = ? LIMIT 1', [req.user.userId]);
+    const user = rows && rows.length ? rows[0] : null;
+    if (!user || user.role !== 'owner') {
+      return res.status(403).json({ message: 'Only owner can set current property' });
+    }
+
+    const propertyRows = await db.query('SELECT id FROM property WHERE id = ? AND ownerId = ? LIMIT 1', [propertyId, user.id]);
+    if (!propertyRows.length) {
+      return res.status(404).json({ message: 'Property not found' });
+    }
+
+    await db.execute('UPDATE `user` SET currentPropertyId = ? WHERE id = ?', [propertyId, user.id]);
+    return res.status(200).json({ message: 'Current property updated', currentPropertyId: propertyId });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to update current property', error: error.message });
   }
 }
 
@@ -99,4 +173,5 @@ module.exports = {
   registerOwner,
   login,
   logout,
+  setCurrentProperty,
 };

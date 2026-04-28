@@ -15,10 +15,13 @@ function buildUpdate(fields, body) {
 
 async function listProperties(req, res) {
   try {
-    const { ownerId } = await resolveOwnerContext(req);
+    const { ownerId, role, propertyId } = await resolveOwnerContext(req);
     let sql = 'SELECT * FROM property';
     const params = [];
-    if (ownerId) {
+    if (role === 'staff' && propertyId) {
+      sql += ' WHERE id = ?';
+      params.push(propertyId);
+    } else if (ownerId) {
       sql += ' WHERE ownerId = ?';
       params.push(ownerId);
     }

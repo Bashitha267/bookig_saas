@@ -14,11 +14,15 @@ CREATE TABLE IF NOT EXISTS `user` (
 	`createdAt` datetime(3) NOT NULL DEFAULT current_timestamp(3),
 	`updatedAt` datetime(3) NOT NULL,
 	`ownerId` int(11) DEFAULT NULL,
+	`propertyId` int(11) DEFAULT NULL,
+	`currentPropertyId` int(11) DEFAULT NULL,
 	`username` varchar(191) NOT NULL,
 	PRIMARY KEY (`id`),
 	UNIQUE KEY `user_contact_unique` (`contact`),
 	UNIQUE KEY `user_username_unique` (`username`),
 	KEY `user_owner_idx` (`ownerId`),
+	KEY `user_property_idx` (`propertyId`),
+	KEY `user_current_property_idx` (`currentPropertyId`),
 	CONSTRAINT `user_owner_fk` FOREIGN KEY (`ownerId`) REFERENCES `user` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -37,6 +41,18 @@ CREATE TABLE IF NOT EXISTS `property` (
 	KEY `property_owner_idx` (`ownerId`),
 	CONSTRAINT `property_owner_fk` FOREIGN KEY (`ownerId`) REFERENCES `user` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE `user`
+	ADD COLUMN IF NOT EXISTS `propertyId` int(11) DEFAULT NULL,
+	ADD COLUMN IF NOT EXISTS `currentPropertyId` int(11) DEFAULT NULL;
+
+ALTER TABLE `user`
+	ADD INDEX IF NOT EXISTS `user_property_idx` (`propertyId`),
+	ADD INDEX IF NOT EXISTS `user_current_property_idx` (`currentPropertyId`);
+
+ALTER TABLE `user`
+	ADD CONSTRAINT `user_property_fk` FOREIGN KEY (`propertyId`) REFERENCES `property` (`id`) ON DELETE SET NULL,
+	ADD CONSTRAINT `user_current_property_fk` FOREIGN KEY (`currentPropertyId`) REFERENCES `property` (`id`) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS `room` (
 	`id` int(11) NOT NULL AUTO_INCREMENT,
