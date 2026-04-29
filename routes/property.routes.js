@@ -6,14 +6,15 @@ const {
   updateProperty,
   deleteProperty,
 } = require('../controllers/property.controller');
-const { authenticate, authorizeRoles } = require('../middleware/auth.middleware');
+const { authenticate, authenticateOptional, authorizeRoles } = require('../middleware/auth.middleware');
 
 const router = express.Router();
 
+router.get('/', authenticateOptional, listProperties);
+router.get('/:id', authenticateOptional, getProperty);
+
 router.use(authenticate);
 
-router.get('/', authorizeRoles('owner', 'admin'), listProperties);
-router.get('/:id', authorizeRoles('owner', 'admin'), getProperty);
 router.post('/', authorizeRoles('owner', 'admin'), createProperty);
 router.put('/:id', authorizeRoles('owner', 'admin'), updateProperty);
 router.delete('/:id', authorizeRoles('owner', 'admin'), deleteProperty);

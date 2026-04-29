@@ -19,6 +19,25 @@ function authenticate(req, res, next) {
   }
 }
 
+function authenticateOptional(req, res, next) {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.startsWith('Bearer ')
+    ? authHeader.split(' ')[1]
+    : null;
+
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    return next();
+  } catch (error) {
+    return next();
+  }
+}
+
 function authorizeRoles(...roles) {
   return (req, res, next) => {
     if (!req.user || !roles.includes(req.user.role)) {
@@ -30,5 +49,6 @@ function authorizeRoles(...roles) {
 
 module.exports = {
   authenticate,
+  authenticateOptional,
   authorizeRoles,
 };

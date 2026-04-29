@@ -12,8 +12,8 @@ const router = express.Router();
 
 router.use(authenticate);
 
-router.get('/', authorizeRoles('owner', 'admin'), listPayments);
-router.get('/:id', authorizeRoles('owner', 'admin'), getPayment);
+router.get('/', authorizeRoles('owner', 'admin', 'staff'), listPayments);
+router.get('/:id', authorizeRoles('owner', 'admin', 'staff'), getPayment);
 router.post('/', authorizeRoles('owner', 'admin'), createPayment);
 router.put('/:id', authorizeRoles('owner', 'admin'), updatePayment);
 router.delete('/:id', authorizeRoles('owner', 'admin'), deletePayment);
