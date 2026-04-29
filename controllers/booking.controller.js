@@ -98,7 +98,7 @@ async function createBooking(req, res) {
   }
 
   try {
-    const { ownerId, role, propertyId } = await resolveOwnerContext(req);
+    const { ownerId, role, propertyId, userId } = await resolveOwnerContext(req);
     const roomRows = await db.query('SELECT id, ownerId, propertyId FROM room WHERE id = ? LIMIT 1', [roomId]);
     const room = roomRows.length ? roomRows[0] : null;
     if (!room) {
@@ -111,10 +111,8 @@ async function createBooking(req, res) {
       return res.status(403).json({ message: 'Room does not belong to your property' });
     }
 
-    const insertOwnerId = role === 'admin' ? room.ownerId : ownerId;
-    if (!insertOwnerId) {
-      return res.status(400).json({ message: 'Owner context is required for booking' });
-    }
+    const insertOwnerId = role === 'admin' ? room.ownerId : ownerId || room.ownerId;
+    const createdBy = userId || room.ownerId;
 
     const result = await db.execute(
       `INSERT INTO booking
@@ -132,7 +130,7 @@ async function createBooking(req, res) {
         children || 0,
         status || 'pending',
         notes || null,
-        req.user.userId,
+        createdBy,
       ]
     );
 
