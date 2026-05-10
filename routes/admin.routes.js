@@ -6,6 +6,7 @@ const {
 	updateUser,
 	updatePropertyStatus,
 	listOwnerBilling,
+	createOwnerBilling,
 	getOwnerBillingSummary,
 	listOwnerPayments,
 	listOwnerPaymentsByOwner,

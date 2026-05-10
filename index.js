@@ -12,7 +12,7 @@ const bookingRoutes = require('./routes/booking.routes');
 const paymentRoutes = require('./routes/payment.routes');
 
 app.use(cors());
-app.options('*', cors());
+app.options(/.*/, cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
