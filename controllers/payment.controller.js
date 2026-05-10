@@ -17,7 +17,7 @@ async function listPayments(req, res) {
   try {
     const { ownerId, role, propertyId } = await resolveOwnerContext(req);
     const requestedPropertyId = req.query.propertyId ? Number(req.query.propertyId) : null;
-    const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId || propertyId;
+    const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId;
     let sql = `
       SELECT p.*, b.guestName, b.roomId
       FROM payment p
@@ -25,16 +25,20 @@ async function listPayments(req, res) {
       LEFT JOIN room r ON b.roomId = r.id
     `;
     const params = [];
+    const conditions = [];
+
     if (ownerId) {
-      sql += ' WHERE p.ownerId = ?';
+      conditions.push('p.ownerId = ?');
       params.push(ownerId);
-      if (scopePropertyId) {
-        sql += ' AND r.propertyId = ?';
-        params.push(scopePropertyId);
-      }
-    } else if (scopePropertyId) {
-      sql += ' WHERE r.propertyId = ?';
+    }
+
+    if (scopePropertyId) {
+      conditions.push('r.propertyId = ?');
       params.push(scopePropertyId);
+    }
+
+    if (conditions.length) {
+      sql += ` WHERE ${conditions.join(' AND ')}`;
     }
     sql += ' ORDER BY p.id DESC';
     const rows = await db.query(sql, params);

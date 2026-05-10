@@ -17,7 +17,8 @@ async function listRooms(req, res) {
   try {
     const { ownerId, role, propertyId } = await resolveOwnerContext(req);
     const requestedPropertyId = req.query.propertyId ? Number(req.query.propertyId) : null;
-    const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId || propertyId;
+    const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId;
+
     const checkInDate = req.query.checkInDate || null;
     const checkOutDate = req.query.checkOutDate || null;
     const hasDates = checkInDate && checkOutDate;
@@ -41,11 +42,9 @@ async function listRooms(req, res) {
     if (ownerId) {
       conditions.push('r.ownerId = ?');
       params.push(ownerId);
-      if (scopePropertyId) {
-        conditions.push('r.propertyId = ?');
-        params.push(scopePropertyId);
-      }
-    } else if (scopePropertyId) {
+    }
+
+    if (scopePropertyId) {
       conditions.push('r.propertyId = ?');
       params.push(scopePropertyId);
     }

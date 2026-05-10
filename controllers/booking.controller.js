@@ -17,7 +17,11 @@ async function listBookings(req, res) {
   try {
     const { ownerId, role, propertyId } = await resolveOwnerContext(req);
     const requestedPropertyId = req.query.propertyId ? Number(req.query.propertyId) : null;
-    const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId || propertyId;
+    
+    // For staff, always lock to their assigned property.
+    // For owners, use requested property if provided, otherwise show all (no scope filter).
+    const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId;
+
     let sql = `
       SELECT b.*, r.roomNumber, r.roomType, p.name AS propertyName
       FROM booking b
@@ -25,17 +29,22 @@ async function listBookings(req, res) {
       LEFT JOIN property p ON r.propertyId = p.id
     `;
     const params = [];
+    const conditions = [];
+
     if (ownerId) {
-      sql += ' WHERE b.ownerId = ?';
+      conditions.push('b.ownerId = ?');
       params.push(ownerId);
-      if (scopePropertyId) {
-        sql += ' AND r.propertyId = ?';
-        params.push(scopePropertyId);
-      }
-    } else if (scopePropertyId) {
-      sql += ' WHERE r.propertyId = ?';
+    }
+
+    if (scopePropertyId) {
+      conditions.push('r.propertyId = ?');
       params.push(scopePropertyId);
     }
+
+    if (conditions.length) {
+      sql += ` WHERE ${conditions.join(' AND ')}`;
+    }
+
     sql += ' ORDER BY b.id DESC';
     const rows = await db.query(sql, params);
     return res.json({ data: rows });
