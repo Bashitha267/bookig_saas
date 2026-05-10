@@ -7,11 +7,12 @@ const {
   deleteRoom,
 } = require('../controllers/room.controller');
 const { authenticate, authenticateOptional, authorizeRoles } = require('../middleware/auth.middleware');
+const { cacheResponse } = require('../middleware/cache.middleware');
 
 const router = express.Router();
 
-router.get('/', authenticateOptional, listRooms);
-router.get('/:id', authenticateOptional, getRoom);
+router.get('/', authenticateOptional, cacheResponse({ ttlMs: 10000 }), listRooms);
+router.get('/:id', authenticateOptional, cacheResponse({ ttlMs: 10000 }), getRoom);
 
 router.use(authenticate);
 

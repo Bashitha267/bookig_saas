@@ -7,11 +7,12 @@ const {
   deleteProperty,
 } = require('../controllers/property.controller');
 const { authenticate, authenticateOptional, authorizeRoles } = require('../middleware/auth.middleware');
+const { cacheResponse } = require('../middleware/cache.middleware');
 
 const router = express.Router();
 
-router.get('/', authenticateOptional, listProperties);
-router.get('/:id', authenticateOptional, getProperty);
+router.get('/', authenticateOptional, cacheResponse({ ttlMs: 10000 }), listProperties);
+router.get('/:id', authenticateOptional, cacheResponse({ ttlMs: 10000 }), getProperty);
 
 router.use(authenticate);
 
