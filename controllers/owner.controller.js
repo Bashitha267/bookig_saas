@@ -47,4 +47,24 @@ async function submitPayment(req, res) {
   }
 }
 
-module.exports = { getMyBilling, getMyPayments, submitPayment };
+async function getSystemStatus(req, res) {
+  const ownerId = req.user.userId;
+  try {
+    const settingsRows = await db.query("SELECT `value` FROM system_settings WHERE `key` = 'global_billing_amount' LIMIT 1");
+    const globalFee = settingsRows.length ? Number(settingsRows[0].value) : 0;
+
+    const billingRows = await db.query(
+      "SELECT * FROM owner_billing WHERE ownerId = ? ORDER BY periodEnd DESC LIMIT 1",
+      [ownerId]
+    );
+    
+    return res.json({
+      globalFee,
+      latestBilling: billingRows.length ? billingRows[0] : null
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Error', error: error.message });
+  }
+}
+
+module.exports = { getMyBilling, getMyPayments, submitPayment, getSystemStatus };
