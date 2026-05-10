@@ -77,11 +77,11 @@ async function listOwners(req, res) {
   try {
     const { q, status } = req.query;
     const sqlParts = [
-      "SELECT u.id, u.firstName, u.lastName, u.username, u.contact, u.address, u.email, u.status, u.createdAt",
-      'COUNT(DISTINCT p.id) AS propertyCount',
-      'COUNT(DISTINCT s.id) AS staffCount',
-      'MAX(ob.status) AS currentBillingStatus',
-      'MAX(ob.amountDue) AS currentAmountDue',
+      "SELECT u.id, u.firstName, u.lastName, u.username, u.contact, u.address, u.email, u.status, u.createdAt,",
+      'COUNT(DISTINCT p.id) AS propertyCount,',
+      'COUNT(DISTINCT s.id) AS staffCount,',
+      'MAX(ob.status) AS currentBillingStatus,',
+      'MAX(ob.amountDue) AS currentAmountDue,',
       'MAX(ob.amountPaid) AS currentAmountPaid',
       'FROM `user` u',
       'LEFT JOIN property p ON p.ownerId = u.id',
