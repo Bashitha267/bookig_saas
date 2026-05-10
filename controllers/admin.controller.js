@@ -235,6 +235,47 @@ async function updatePropertyStatus(req, res) {
   }
 }
 
+async function getSystemSettings(req, res) {
+  try {
+    const rows = await db.query('SELECT * FROM system_settings');
+    const settings = rows.reduce((acc, row) => ({ ...acc, [row.key]: row.value }), {});
+    return res.json({ data: settings });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to load settings', error: error.message });
+  }
+}
+
+async function updateSystemSetting(req, res) {
+  const { key, value } = req.body;
+  if (!key) return res.status(400).json({ message: 'Key is required' });
+  try {
+    await db.execute(
+      'INSERT INTO system_settings (`key`, `value`, `updatedAt`) VALUES (?, ?, NOW()) ON DUPLICATE KEY UPDATE `value` = ?, `updatedAt` = NOW()',
+      [key, String(value), String(value)]
+    );
+    return res.json({ message: 'Setting updated' });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to update setting', error: error.message });
+  }
+}
+
+async function createOwnerBilling(req, res) {
+  const { ownerId, amountDue, periodStart, periodEnd } = req.body;
+  if (!ownerId || amountDue === undefined || !periodStart || !periodEnd) {
+    return res.status(400).json({ message: 'Missing required fields' });
+  }
+
+  try {
+    const result = await db.execute(
+      'INSERT INTO owner_billing (ownerId, amountDue, amountPaid, periodStart, periodEnd, status, createdAt, updatedAt) VALUES (?, ?, 0, ?, ?, ?, NOW(), NOW())',
+      [ownerId, amountDue, periodStart, periodEnd, 'pending']
+    );
+    return res.status(201).json({ message: 'Billing record created', id: result.insertId });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to create billing record', error: error.message });
+  }
+}
+
 async function listOwnerBilling(req, res) {
   try {
     const { ownerId, status, q } = req.query;
@@ -530,9 +571,12 @@ module.exports = {
   updateUser,
   updatePropertyStatus,
   listOwnerBilling,
+  createOwnerBilling,
   getOwnerBillingSummary,
   listOwnerPayments,
   listOwnerPaymentsByOwner,
   createOwnerPayment,
   updateOwnerPaymentStatus,
+  getSystemSettings,
+  updateSystemSetting,
 };

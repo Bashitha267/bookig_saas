@@ -11,6 +11,8 @@ const {
 	listOwnerPaymentsByOwner,
 	createOwnerPayment,
 	updateOwnerPaymentStatus,
+	getSystemSettings,
+	updateSystemSetting,
 } = require('../controllers/admin.controller');
 const { authenticate, authorizeRoles } = require('../middleware/auth.middleware');
 
@@ -27,10 +29,14 @@ router.patch('/users/:id', updateUser);
 router.patch('/properties/:id/status', updatePropertyStatus);
 
 router.get('/billing', listOwnerBilling);
+router.post('/billing', createOwnerBilling);
 router.get('/billing/summary', getOwnerBillingSummary);
 
 router.get('/owner-payments', listOwnerPayments);
 router.post('/owner-payments', createOwnerPayment);
 router.patch('/owner-payments/:id/status', updateOwnerPaymentStatus);
+
+router.get('/settings', getSystemSettings);
+router.post('/settings', updateSystemSetting);
 
 module.exports = router;
