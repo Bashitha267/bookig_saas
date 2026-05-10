@@ -1,5 +1,5 @@
 const express = require('express');
-const { createAdmin } = require('../controllers/auth/admin.controller');
+const { createAdmin, listAdmins } = require('../controllers/auth/admin.controller');
 const {
 	listOwners,
 	getOwner,
@@ -19,6 +19,7 @@ const router = express.Router();
 router.use(authenticate, authorizeRoles('admin'));
 
 router.post('/create', createAdmin);
+router.get('/admins', listAdmins);
 router.get('/owners', listOwners);
 router.get('/owners/:id', getOwner);
 router.get('/owners/:id/payments', listOwnerPaymentsByOwner);

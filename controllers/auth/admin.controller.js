@@ -39,6 +39,18 @@ async function createAdmin(req, res) {
   }
 }
 
+async function listAdmins(req, res) {
+  try {
+    const rows = await db.query(
+      "SELECT id, firstName, lastName, username, contact, whatsapp, address, status, createdAt FROM `user` WHERE role = 'admin' ORDER BY id DESC"
+    );
+    return res.json({ data: rows });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to load administrators', error: error.message });
+  }
+}
+
 module.exports = {
   createAdmin,
+  listAdmins,
 };
