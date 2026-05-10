@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS `owner_payment` (
   `ownerId` int(11) NOT NULL,
   `billingId` int(11) DEFAULT NULL,
   `amount` decimal(10,2) NOT NULL,
-  `currency` varchar(10) NOT NULL DEFAULT 'USD',
+  `currency` varchar(10) NOT NULL DEFAULT 'LKR',
   `method` enum('cash','card','bank','online') NOT NULL DEFAULT 'bank',
   `status` enum('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   `paidAt` datetime(3) DEFAULT NULL,

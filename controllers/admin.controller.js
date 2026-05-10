@@ -483,7 +483,7 @@ async function createOwnerPayment(req, res) {
         ownerId,
         billingId || null,
         amount,
-        currency || 'USD',
+        currency || 'LKR',
         method || 'bank',
         paymentStatus,
         paidAtValue,

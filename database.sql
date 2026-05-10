@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS `payment` (
 	`ownerId` int(11) NOT NULL,
 	`bookingId` int(11) NOT NULL,
 	`amount` decimal(10,2) NOT NULL,
-	`currency` varchar(10) NOT NULL DEFAULT 'USD',
+	`currency` varchar(10) NOT NULL DEFAULT 'LKR',
 	`method` enum('cash','card','bank','online') NOT NULL DEFAULT 'cash',
 	`status` enum('pending','paid','refunded') NOT NULL DEFAULT 'paid',
 	`paidAt` datetime(3) DEFAULT NULL,
