@@ -126,6 +126,14 @@ async function getOwner(req, res) {
       [id]
     );
 
+    // Fetch rooms for each property
+    for (const prop of properties) {
+      prop.rooms = await db.query(
+        'SELECT id, name, type, price, status FROM room WHERE propertyId = ? ORDER BY id DESC',
+        [prop.id]
+      );
+    }
+    
     const staff = await db.query(
       "SELECT id, firstName, lastName, username, contact, whatsapp, address, status, propertyId, createdAt FROM `user` WHERE ownerId = ? AND role = 'staff' ORDER BY id DESC",
       [id]
