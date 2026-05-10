@@ -58,9 +58,47 @@ async function getSystemStatus(req, res) {
       [ownerId]
     );
     
+    const now = new Date();
+    const monthName = now.toLocaleString('default', { month: 'long' });
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    // Get all payments for this month grouped by status
+    const paymentRows = await db.query(
+      "SELECT status, SUM(amount) as total FROM owner_payment WHERE ownerId = ? AND createdAt >= ? GROUP BY status",
+      [ownerId, monthStart]
+    );
+    
+    let approvedPaid = 0;
+    let pendingPaid = 0;
+    paymentRows.forEach(row => {
+      if (row.status === 'approved') approvedPaid = Number(row.total);
+      if (row.status === 'pending') pendingPaid = Number(row.total);
+    });
+
+    const latestBilling = billingRows.length ? billingRows[0] : null;
+    const amountDue = latestBilling ? Number(latestBilling.amountDue) : globalFee;
+    
+    // Remaining is what's left after approved payments
+    const remaining = Math.max(0, amountDue - approvedPaid);
+    
+    let status = 'unpaid';
+    // If it's fully paid (approved)
+    if (remaining <= 0 && amountDue > 0) {
+      status = 'paid';
+    } 
+    // If there's any payment activity (pending or approved but not full)
+    else if (pendingPaid > 0 || approvedPaid > 0) {
+      status = 'partial';
+    }
+
     return res.json({
+      monthName,
       globalFee,
-      latestBilling: billingRows.length ? billingRows[0] : null
+      approvedPaid,
+      pendingPaid,
+      remaining,
+      status,
+      latestBilling
     });
   } catch (error) {
     return res.status(500).json({ message: 'Error', error: error.message });
