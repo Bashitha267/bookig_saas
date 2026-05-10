@@ -11,11 +11,29 @@ const roomRoutes = require('./routes/room.routes');
 const bookingRoutes = require('./routes/booking.routes');
 const paymentRoutes = require('./routes/payment.routes');
 
+const corsOrigins = [
+  process.env.CLIENT_URL,
+  /^https:\/\/.*\.hostingersite\.com$/
+].filter(Boolean);
+
 app.use(cors({
-  origin: '*',
+  origin: (origin, callback) => {
+    if (!origin) {
+      return callback(null, true);
+    }
+    const isAllowed = corsOrigins.some((entry) => {
+      if (entry instanceof RegExp) {
+        return entry.test(origin);
+      }
+      return entry === origin;
+    });
+    return callback(null, isAllowed);
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
+app.options('*', cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
