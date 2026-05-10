@@ -51,24 +51,24 @@ function buildDateRange(query) {
 
 function applyDateOverlap(sqlParts, params, tableAlias, startDate, endDate) {
   if (startDate && endDate) {
-    sqlParts.push(`${tableAlias}.periodStart <= ? AND ${tableAlias}.periodEnd >= ?`);
+    sqlParts.push(`AND ${tableAlias}.periodStart <= ? AND ${tableAlias}.periodEnd >= ?`);
     params.push(endDate, startDate);
   } else if (startDate) {
-    sqlParts.push(`${tableAlias}.periodEnd >= ?`);
+    sqlParts.push(`AND ${tableAlias}.periodEnd >= ?`);
     params.push(startDate);
   } else if (endDate) {
-    sqlParts.push(`${tableAlias}.periodStart <= ?`);
+    sqlParts.push(`AND ${tableAlias}.periodStart <= ?`);
     params.push(endDate);
   }
 }
 
 function applyDateRange(sqlParts, params, fieldName, startDate, endDate) {
   if (startDate) {
-    sqlParts.push(`${fieldName} >= ?`);
+    sqlParts.push(`AND ${fieldName} >= ?`);
     params.push(startDate);
   }
   if (endDate) {
-    sqlParts.push(`${fieldName} <= ?`);
+    sqlParts.push(`AND ${fieldName} <= ?`);
     params.push(endDate);
   }
 }
