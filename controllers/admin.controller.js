@@ -684,6 +684,40 @@ async function updateOwnerPaymentStatus(req, res) {
   }
 }
 
+async function deleteOwnerPayment(req, res) {
+  const { id } = req.params;
+  try {
+    const payment = await db.query('SELECT * FROM owner_payment WHERE id = ?', [id]);
+    if (!payment.length) {
+      return res.status(404).json({ message: 'Payment not found' });
+    }
+
+    const { billingId, amount, status } = payment[0];
+
+    await db.query('DELETE FROM owner_payment WHERE id = ?', [id]);
+
+    if (billingId && status === 'approved') {
+      await db.query(
+        'UPDATE owner_billing SET amountPaid = amountPaid - ? WHERE id = ?',
+        [amount, billingId]
+      );
+      
+      const billingRec = await db.query('SELECT amountDue, amountPaid FROM owner_billing WHERE id = ?', [billingId]);
+      if (billingRec.length) {
+        const { amountDue, amountPaid } = billingRec[0];
+        let newStatus = 'pending';
+        if (Number(amountPaid) >= Number(amountDue) && Number(amountDue) > 0) newStatus = 'paid';
+        else if (Number(amountPaid) > 0) newStatus = 'partial';
+        await db.query('UPDATE owner_billing SET status = ? WHERE id = ?', [newStatus, billingId]);
+      }
+    }
+
+    return res.json({ message: 'Payment deleted successfully' });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to delete payment', error: error.message });
+  }
+}
+
 async function listRecentLoggedUsers(req, res) {
   try {
     const rows = await db.query(
