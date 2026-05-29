@@ -565,6 +565,28 @@ async function updateOwnerPaymentStatus(req, res) {
   }
 }
 
+async function listRecentLoggedUsers(req, res) {
+  try {
+    const rows = await db.query(
+      "SELECT id, firstName, lastName, username, role, email, contact, lastLoginAt FROM `user` WHERE lastLoginAt IS NOT NULL ORDER BY lastLoginAt DESC LIMIT 10"
+    );
+    return res.json({ data: rows });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to load recent logged users', error: error.message });
+  }
+}
+
+async function listOnlineUsers(req, res) {
+  try {
+    const rows = await db.query(
+      "SELECT id, firstName, lastName, username, role, email, contact, lastActiveAt FROM `user` WHERE lastActiveAt >= DATE_SUB(NOW(3), INTERVAL 5 MINUTE) ORDER BY lastActiveAt DESC"
+    );
+    return res.json({ data: rows });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to load online users', error: error.message });
+  }
+}
+
 module.exports = {
   listOwners,
   getOwner,
@@ -579,4 +601,6 @@ module.exports = {
   updateOwnerPaymentStatus,
   getSystemSettings,
   updateSystemSetting,
+  listRecentLoggedUsers,
+  listOnlineUsers,
 };

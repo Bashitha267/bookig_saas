@@ -14,6 +14,8 @@ const {
 	updateOwnerPaymentStatus,
 	getSystemSettings,
 	updateSystemSetting,
+	listRecentLoggedUsers,
+	listOnlineUsers,
 } = require('../controllers/admin.controller');
 const { authenticate, authorizeRoles } = require('../middleware/auth.middleware');
 const { cacheResponse } = require('../middleware/cache.middleware');
@@ -24,6 +26,8 @@ router.use(authenticate, authorizeRoles('admin'));
 
 router.post('/create', createAdmin);
 router.get('/admins', listAdmins);
+router.get('/users/recent-logged', listRecentLoggedUsers);
+router.get('/users/online', listOnlineUsers);
 router.get('/owners', cacheResponse({ ttlMs: 15000 }), listOwners);
 router.get('/owners/:id', cacheResponse({ ttlMs: 15000 }), getOwner);
 router.get('/owners/:id/payments', cacheResponse({ ttlMs: 15000 }), listOwnerPaymentsByOwner);

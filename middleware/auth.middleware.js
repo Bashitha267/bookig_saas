@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const db = require('../lib/db');
 
 function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -13,6 +14,7 @@ function authenticate(req, res, next) {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
+    db.execute('UPDATE `user` SET lastActiveAt = NOW(3) WHERE id = ?', [decoded.userId]).catch(() => {});
     return next();
   } catch (error) {
     return res.status(401).json({ message: 'Invalid or expired token' });
@@ -32,6 +34,7 @@ function authenticateOptional(req, res, next) {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
+    db.execute('UPDATE `user` SET lastActiveAt = NOW(3) WHERE id = ?', [decoded.userId]).catch(() => {});
     return next();
   } catch (error) {
     return next();

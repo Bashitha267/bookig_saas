@@ -111,6 +111,8 @@ async function login(req, res) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
+    await db.execute('UPDATE `user` SET lastLoginAt = NOW(3), lastActiveAt = NOW(3) WHERE id = ?', [user.id]);
+
     const token = jwt.sign(
       { userId: user.id, username: user.username, role: user.role },
       process.env.JWT_SECRET,
