@@ -718,6 +718,7 @@ module.exports = {
   listOwnerPaymentsByOwner,
   createOwnerPayment,
   updateOwnerPaymentStatus,
+  deleteOwnerPayment,
   getSystemSettings,
   updateSystemSetting,
   listRecentLoggedUsers,

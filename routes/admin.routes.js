@@ -12,6 +12,7 @@ const {
 	listOwnerPaymentsByOwner,
 	createOwnerPayment,
 	updateOwnerPaymentStatus,
+	deleteOwnerPayment,
 	getSystemSettings,
 	updateSystemSetting,
 	listRecentLoggedUsers,
@@ -41,6 +42,7 @@ router.get('/billing/summary', cacheResponse({ ttlMs: 15000 }), getOwnerBillingS
 router.get('/owner-payments', cacheResponse({ ttlMs: 15000 }), listOwnerPayments);
 router.post('/owner-payments', createOwnerPayment);
 router.patch('/owner-payments/:id/status', updateOwnerPaymentStatus);
+router.delete('/owner-payments/:id', deleteOwnerPayment);
 
 router.get('/settings', cacheResponse({ ttlMs: 30000 }), getSystemSettings);
 router.post('/settings', updateSystemSetting);
