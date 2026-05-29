@@ -1,0 +1,1 @@
+require("dotenv").config(); const db = require("./lib/db"); async function run() { try { const result = await db.query("UPDATE property SET quickExpenses = ? WHERE id = ?", ['[{"id":"1","name":"Test","amount":50}]', 1]); console.log(result); } catch (e) { console.error(e); } process.exit(0); } run();

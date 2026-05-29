@@ -317,8 +317,12 @@ async function listOwnerBilling(req, res) {
     }
 
     if (status) {
-      sqlParts.push('AND ob.status = ?');
-      params.push(status);
+      if (status === 'promotions') {
+        sqlParts.push('AND ob.isPromotion = 1');
+      } else {
+        sqlParts.push('AND ob.status = ? AND ob.isPromotion = 0');
+        params.push(status);
+      }
     }
 
     if (q) {
@@ -524,9 +528,9 @@ async function createOwnerPayment(req, res) {
       return res.status(201).json({ message: 'Promotion period created', promoted: true });
     }
 
-    // ── Case 2: Multi-month / Yearly Payment ────────────────────────────
+    // 🔹 Case 2: Standard Payment (1 or more months) 🔹
     let insertedBillingIds = [];
-    if (periodStart && (monthsCovered > 1 || cycle === 'yearly')) {
+    if (periodStart) {
       const months = Number(monthsCovered) || 1;
       const ownerRows = await db.query(
         "SELECT packagePrice, yearlyPrice, yearlyDiscount FROM `user` WHERE id = ? LIMIT 1", [ownerId]
