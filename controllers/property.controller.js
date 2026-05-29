@@ -95,7 +95,7 @@ async function updateProperty(req, res) {
       return res.status(404).json({ message: 'Property not found' });
     }
 
-    const fields = ['name', 'address', 'city', 'country', 'phone', 'email'];
+    const fields = ['name', 'address', 'city', 'country', 'phone', 'email', 'quickExpenses'];
     const { updates, params } = buildUpdate(fields, req.body);
     if (!updates.length) {
       return res.status(400).json({ message: 'No valid fields to update' });

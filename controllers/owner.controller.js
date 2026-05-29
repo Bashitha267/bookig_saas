@@ -105,4 +105,44 @@ async function getSystemStatus(req, res) {
   }
 }
 
-module.exports = { getMyBilling, getMyPayments, submitPayment, getSystemStatus };
+async function getGuests(req, res) {
+  const ownerId = req.user.userId;
+  const { q, startDate, endDate } = req.query;
+  try {
+    const sqlParts = [
+      `SELECT b.id, b.guestName, b.guestContact, b.guestNic, b.checkInDate, b.checkOutDate,
+              b.adults, b.children, b.status, b.notes, b.createdAt,
+              r.roomNumber, r.roomType, r.floor,
+              p.name AS propertyName, p.id AS propertyId`,
+      'FROM booking b',
+      'JOIN room r ON b.roomId = r.id',
+      'JOIN property p ON r.propertyId = p.id',
+      'WHERE b.ownerId = ?',
+    ];
+    const params = [ownerId];
+
+    if (q) {
+      const like = `%${q}%`;
+      sqlParts.push('AND (b.guestName LIKE ? OR b.guestContact LIKE ? OR b.guestNic LIKE ?)');
+      params.push(like, like, like);
+    }
+
+    // Date overlap: booking overlaps the search window if checkIn <= endDate AND checkOut >= startDate
+    if (startDate) {
+      sqlParts.push('AND b.checkOutDate >= ?');
+      params.push(startDate);
+    }
+    if (endDate) {
+      sqlParts.push('AND b.checkInDate <= ?');
+      params.push(endDate);
+    }
+
+    sqlParts.push('ORDER BY b.checkInDate DESC');
+    const rows = await db.query(sqlParts.join(' '), params);
+    return res.json({ data: rows });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to load guests', error: error.message });
+  }
+}
+
+module.exports = { getMyBilling, getMyPayments, submitPayment, getSystemStatus, getGuests };

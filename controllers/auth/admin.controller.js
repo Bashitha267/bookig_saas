@@ -42,7 +42,7 @@ async function createAdmin(req, res) {
 async function listAdmins(req, res) {
   try {
     const rows = await db.query(
-      "SELECT id, firstName, lastName, username, contact, whatsapp, address, status, createdAt FROM `user` WHERE role = 'admin' ORDER BY id DESC"
+      "SELECT id, firstName, lastName, username, nicNumber, contact, whatsapp, address, status, createdAt FROM `user` WHERE role = 'admin' ORDER BY id DESC"
     );
     return res.json({ data: rows });
   } catch (error) {

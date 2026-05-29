@@ -53,7 +53,7 @@ async function getPayment(req, res) {
   try {
     const { ownerId, role, propertyId } = await resolveOwnerContext(req);
     const requestedPropertyId = req.query.propertyId ? Number(req.query.propertyId) : null;
-    const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId || propertyId;
+    const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId;
     let sql = `
       SELECT p.*, b.guestName, b.roomId
       FROM payment p

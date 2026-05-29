@@ -157,9 +157,9 @@ async function getOwner(req, res) {
 
 async function updateUser(req, res) {
   const { id } = req.params;
-  const { username, password, email, status } = req.body;
+  const { username, password, email, status, packagePrice } = req.body;
 
-  if (!username && !password && email === undefined && !status) {
+  if (!username && !password && email === undefined && !status && packagePrice === undefined) {
     return res.status(400).json({ message: 'No valid fields to update' });
   }
 
@@ -191,6 +191,13 @@ async function updateUser(req, res) {
     if (status) {
       updates.push('status = ?');
       params.push(status);
+    }
+
+    if (packagePrice !== undefined) {
+      // null means "use global price", otherwise store the custom value
+      const price = packagePrice === '' || packagePrice === null ? null : Number(packagePrice);
+      updates.push('packagePrice = ?');
+      params.push(price);
     }
 
     if (password) {
@@ -326,38 +333,45 @@ async function getOwnerBillingSummary(req, res) {
       return res.status(400).json({ message: error });
     }
 
-    const sqlParts = [
-      'SELECT',
-      'COUNT(*) AS totalCount,',
-      'SUM(ob.amountDue) AS totalDue,',
-      'SUM(ob.amountPaid) AS totalPaid,',
-      "SUM(CASE WHEN ob.status = 'paid' THEN 1 ELSE 0 END) AS paidCount,",
-      "SUM(CASE WHEN ob.status IN ('pending','partial','overdue') THEN 1 ELSE 0 END) AS unpaidCount",
+    const baseParts = [
       'FROM owner_billing ob',
       'JOIN `user` u ON ob.ownerId = u.id',
       "WHERE u.role = 'owner'",
     ];
-    const params = [];
+    const baseParams = [];
 
     if (ownerId) {
-      sqlParts.push('AND ob.ownerId = ?');
-      params.push(ownerId);
+      baseParts.push('AND ob.ownerId = ?');
+      baseParams.push(ownerId);
     }
-
     if (status) {
-      sqlParts.push('AND ob.status = ?');
-      params.push(status);
+      baseParts.push('AND ob.status = ?');
+      baseParams.push(status);
     }
-
     if (q) {
       const like = `%${q}%`;
-      sqlParts.push('AND (u.firstName LIKE ? OR u.lastName LIKE ? OR u.username LIKE ? OR u.contact LIKE ?)');
-      params.push(like, like, like, like);
+      baseParts.push('AND (u.firstName LIKE ? OR u.lastName LIKE ? OR u.username LIKE ? OR u.contact LIKE ?)');
+      baseParams.push(like, like, like, like);
     }
+    applyDateOverlap(baseParts, baseParams, 'ob', startDate, endDate);
 
-    applyDateOverlap(sqlParts, params, 'ob', startDate, endDate);
+    // Revenue summary (exclude promotions)
+    const revenueParts = [
+      'SELECT',
+      'COUNT(*) AS totalCount,',
+      'SUM(CASE WHEN ob.isPromotion = 0 THEN ob.amountDue ELSE 0 END) AS totalDue,',
+      'SUM(CASE WHEN ob.isPromotion = 0 THEN ob.amountPaid ELSE 0 END) AS totalPaid,',
+      "SUM(CASE WHEN ob.isPromotion = 0 AND ob.status = 'paid' THEN 1 ELSE 0 END) AS paidCount,",
+      "SUM(CASE WHEN ob.isPromotion = 0 AND ob.status IN ('pending','partial','overdue') THEN 1 ELSE 0 END) AS unpaidCount,",
+      // Promotion metrics
+      'SUM(CASE WHEN ob.isPromotion = 1 THEN 1 ELSE 0 END) AS promotionCount,',
+      'SUM(CASE WHEN ob.isPromotion = 1 THEN ob.amountDue ELSE 0 END) AS promotionValue,',
+      // Discount totals
+      'SUM(CASE WHEN ob.isPromotion = 0 THEN ob.discount ELSE 0 END) AS totalDiscount',
+      ...baseParts,
+    ];
 
-    const rows = await db.query(sqlParts.join(' '), params);
+    const rows = await db.query(revenueParts.join(' '), baseParams);
     return res.json({ data: rows[0] || {} });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to load billing summary', error: error.message });
@@ -453,6 +467,13 @@ async function createOwnerPayment(req, res) {
     note,
     proofUrl,
     proofType,
+    // New fields
+    isPromotion,
+    billingCycle,
+    monthsCovered,
+    discount,
+    periodStart,
+    periodEnd,
   } = req.body;
 
   if (!ownerId || amount === undefined) {
@@ -460,28 +481,110 @@ async function createOwnerPayment(req, res) {
   }
 
   try {
-    let billing = null;
-    if (billingId) {
+    const paymentStatus = status || 'approved';
+    const isApproved = paymentStatus === 'approved';
+    const paidAtValue = paidAt || (isApproved ? new Date() : null);
+    const cycle = billingCycle || 'monthly';
+    const discountAmt = Number(discount || 0);
+    const promoFlag = isPromotion ? 1 : 0;
+
+    // ── Case 1: Promotion / Free Trial ──────────────────────────────────
+    if (isPromotion && periodStart && periodEnd) {
+      // Look up owner's custom price or global price for the "waived" value
+      const ownerRows = await db.query(
+        "SELECT packagePrice FROM `user` WHERE id = ? LIMIT 1", [ownerId]
+      );
+      const settingsRows = await db.query(
+        "SELECT value FROM system_settings WHERE `key` = 'global_billing_amount' LIMIT 1"
+      );
+      const globalFee = settingsRows.length ? Number(settingsRows[0].value) : 0;
+      const ownerPrice = ownerRows.length && ownerRows[0].packagePrice !== null
+        ? Number(ownerRows[0].packagePrice) : globalFee;
+
+      // Create a billing record marked as promotion (amountDue = owner's price, amountPaid = same → paid)
+      await db.execute(
+        `INSERT INTO owner_billing
+          (ownerId, periodStart, periodEnd, amountDue, amountPaid, status, isPromotion, billingCycle, discount, note, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, 'paid', 1, ?, 0, ?, NOW(), NOW())`,
+        [ownerId, periodStart, periodEnd, ownerPrice, ownerPrice, cycle, note || null]
+      );
+
+      return res.status(201).json({ message: 'Promotion period created', promoted: true });
+    }
+
+    // ── Case 2: Multi-month / Yearly Payment ────────────────────────────
+    let insertedBillingIds = [];
+    if (periodStart && (monthsCovered > 1 || cycle === 'yearly')) {
+      const months = Number(monthsCovered) || 1;
+      const ownerRows = await db.query(
+        "SELECT packagePrice FROM `user` WHERE id = ? LIMIT 1", [ownerId]
+      );
+      const settingsRows = await db.query(
+        "SELECT value FROM system_settings WHERE `key` = 'global_billing_amount' LIMIT 1"
+      );
+      const globalFee = settingsRows.length ? Number(settingsRows[0].value) : 0;
+      const basePrice = ownerRows.length && ownerRows[0].packagePrice !== null
+        ? Number(ownerRows[0].packagePrice) : globalFee;
+
+      // Per-month amount after discount (total discount spread equally)
+      const totalDiscount = discountAmt;
+      const totalDue = basePrice * months - totalDiscount;
+      const perMonthDue = Number((totalDue / months).toFixed(2));
+      const perMonthPaid = isApproved ? perMonthDue : 0;
+      const perMonthDiscount = Number((totalDiscount / months).toFixed(2));
+
+      const startDate = new Date(periodStart);
+      for (let i = 0; i < months; i++) {
+        const mStart = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
+        const mEnd = new Date(startDate.getFullYear(), startDate.getMonth() + i + 1, 0);
+        const mStartStr = mStart.toISOString().split('T')[0];
+        const mEndStr = mEnd.toISOString().split('T')[0];
+        const billingStatus = isApproved ? resolveBillingStatus(perMonthDue, perMonthPaid) : 'pending';
+
+        const billingResult = await db.execute(
+          `INSERT INTO owner_billing
+            (ownerId, periodStart, periodEnd, amountDue, amountPaid, status, isPromotion, billingCycle, discount, note, createdAt, updatedAt)
+           VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, NOW(), NOW())
+           ON DUPLICATE KEY UPDATE
+             amountDue = VALUES(amountDue),
+             amountPaid = amountPaid + VALUES(amountPaid),
+             status = VALUES(status),
+             billingCycle = VALUES(billingCycle),
+             discount = VALUES(discount),
+             updatedAt = NOW()`,
+          [ownerId, mStartStr, mEndStr, perMonthDue, perMonthPaid, billingStatus, cycle, perMonthDiscount, note || null]
+        );
+        insertedBillingIds.push(billingResult.insertId || null);
+      }
+    } else if (billingId) {
+      // Single existing billing record
       const billingRows = await db.query(
         'SELECT id, ownerId, amountDue, amountPaid FROM owner_billing WHERE id = ? LIMIT 1',
         [billingId]
       );
-      billing = billingRows.length ? billingRows[0] : null;
+      const billing = billingRows.length ? billingRows[0] : null;
       if (!billing || String(billing.ownerId) !== String(ownerId)) {
         return res.status(400).json({ message: 'Invalid billing record for owner' });
       }
+      if (isApproved) {
+        const nextPaid = Number(billing.amountPaid || 0) + Number(amount || 0);
+        const nextStatus = resolveBillingStatus(Number(billing.amountDue || 0), nextPaid);
+        await db.execute(
+          'UPDATE owner_billing SET amountPaid = ?, status = ?, updatedAt = NOW() WHERE id = ?',
+          [nextPaid, nextStatus, billing.id]
+        );
+      }
+      insertedBillingIds = [billingId];
     }
 
-    const paymentStatus = status || 'approved';
-    const isApproved = paymentStatus === 'approved';
-    const paidAtValue = paidAt || (isApproved ? new Date() : null);
+    // Create the actual payment transaction record
     const result = await db.execute(
       `INSERT INTO owner_payment
         (ownerId, billingId, amount, currency, method, status, paidAt, proofUrl, proofType, note, approvedBy, approvedAt, createdAt, updatedAt)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())`,
       [
         ownerId,
-        billingId || null,
+        insertedBillingIds[0] || billingId || null,
         amount,
         currency || 'LKR',
         method || 'bank',
@@ -495,16 +598,7 @@ async function createOwnerPayment(req, res) {
       ]
     );
 
-    if (isApproved && billing) {
-      const nextPaid = Number(billing.amountPaid || 0) + Number(amount || 0);
-      const nextStatus = resolveBillingStatus(Number(billing.amountDue || 0), nextPaid);
-      await db.execute(
-        'UPDATE owner_billing SET amountPaid = ?, status = ?, updatedAt = NOW() WHERE id = ?',
-        [nextPaid, nextStatus, billing.id]
-      );
-    }
-
-    return res.status(201).json({ message: 'Owner payment created', id: result.insertId });
+    return res.status(201).json({ message: 'Owner payment created', id: result.insertId, billingIds: insertedBillingIds });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to create owner payment', error: error.message });
   }
