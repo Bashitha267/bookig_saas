@@ -114,7 +114,7 @@ async function getOwner(req, res) {
   const { id } = req.params;
   try {
     const ownerRows = await db.query(
-      "SELECT id, firstName, lastName, username, contact, whatsapp, address, email, status, createdAt FROM `user` WHERE id = ? AND role = 'owner' LIMIT 1",
+      "SELECT id, firstName, lastName, username, contact, whatsapp, address, email, status, createdAt, packagePrice, yearlyPrice, yearlyDiscount FROM `user` WHERE id = ? AND role = 'owner' LIMIT 1",
       [id]
     );
     if (!ownerRows.length) {
@@ -157,9 +157,9 @@ async function getOwner(req, res) {
 
 async function updateUser(req, res) {
   const { id } = req.params;
-  const { username, password, email, status, packagePrice } = req.body;
+  const { username, password, email, status, packagePrice, yearlyPrice, yearlyDiscount } = req.body;
 
-  if (!username && !password && email === undefined && !status && packagePrice === undefined) {
+  if (!username && !password && email === undefined && !status && packagePrice === undefined && yearlyPrice === undefined && yearlyDiscount === undefined) {
     return res.status(400).json({ message: 'No valid fields to update' });
   }
 
@@ -198,6 +198,18 @@ async function updateUser(req, res) {
       const price = packagePrice === '' || packagePrice === null ? null : Number(packagePrice);
       updates.push('packagePrice = ?');
       params.push(price);
+    }
+
+    if (yearlyPrice !== undefined) {
+      const price = yearlyPrice === '' || yearlyPrice === null ? null : Number(yearlyPrice);
+      updates.push('yearlyPrice = ?');
+      params.push(price);
+    }
+
+    if (yearlyDiscount !== undefined) {
+      const discount = yearlyDiscount === '' || yearlyDiscount === null ? null : Number(yearlyDiscount);
+      updates.push('yearlyDiscount = ?');
+      params.push(discount);
     }
 
     if (password) {
@@ -517,17 +529,30 @@ async function createOwnerPayment(req, res) {
     if (periodStart && (monthsCovered > 1 || cycle === 'yearly')) {
       const months = Number(monthsCovered) || 1;
       const ownerRows = await db.query(
-        "SELECT packagePrice FROM `user` WHERE id = ? LIMIT 1", [ownerId]
+        "SELECT packagePrice, yearlyPrice, yearlyDiscount FROM `user` WHERE id = ? LIMIT 1", [ownerId]
       );
       const settingsRows = await db.query(
         "SELECT value FROM system_settings WHERE `key` = 'global_billing_amount' LIMIT 1"
       );
       const globalFee = settingsRows.length ? Number(settingsRows[0].value) : 0;
-      const basePrice = ownerRows.length && ownerRows[0].packagePrice !== null
-        ? Number(ownerRows[0].packagePrice) : globalFee;
+      
+      let basePrice = globalFee;
+      let calculatedDiscount = discountAmt;
+
+      if (ownerRows.length) {
+        if (cycle === 'yearly' && ownerRows[0].yearlyPrice != null) {
+          basePrice = Number(ownerRows[0].yearlyPrice) / 12; // Base price spread over 12 months for calculation
+          // If yearly discount is configured and no manual discount was provided, use the user's config
+          if (!discountAmt && ownerRows[0].yearlyDiscount != null) {
+            calculatedDiscount = Number(ownerRows[0].yearlyDiscount);
+          }
+        } else if (ownerRows[0].packagePrice !== null) {
+          basePrice = Number(ownerRows[0].packagePrice);
+        }
+      }
 
       // Per-month amount after discount (total discount spread equally)
-      const totalDiscount = discountAmt;
+      const totalDiscount = calculatedDiscount;
       const totalDue = basePrice * months - totalDiscount;
       const perMonthDue = Number((totalDue / months).toFixed(2));
       const perMonthPaid = isApproved ? perMonthDue : 0;
