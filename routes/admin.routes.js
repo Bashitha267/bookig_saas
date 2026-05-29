@@ -29,22 +29,22 @@ router.post('/create', createAdmin);
 router.get('/admins', listAdmins);
 router.get('/users/recent-logged', listRecentLoggedUsers);
 router.get('/users/online', listOnlineUsers);
-router.get('/owners', cacheResponse({ ttlMs: 15000 }), listOwners);
-router.get('/owners/:id', cacheResponse({ ttlMs: 15000 }), getOwner);
-router.get('/owners/:id/payments', cacheResponse({ ttlMs: 15000 }), listOwnerPaymentsByOwner);
+router.get('/owners', listOwners);
+router.get('/owners/:id', getOwner);
+router.get('/owners/:id/payments', listOwnerPaymentsByOwner);
 router.patch('/users/:id', updateUser);
 router.patch('/properties/:id/status', updatePropertyStatus);
 
-router.get('/billing', cacheResponse({ ttlMs: 15000 }), listOwnerBilling);
+router.get('/billing', listOwnerBilling);
 router.post('/billing', createOwnerBilling);
-router.get('/billing/summary', cacheResponse({ ttlMs: 15000 }), getOwnerBillingSummary);
+router.get('/billing/summary', getOwnerBillingSummary);
 
-router.get('/owner-payments', cacheResponse({ ttlMs: 15000 }), listOwnerPayments);
+router.get('/owner-payments', listOwnerPayments);
 router.post('/owner-payments', createOwnerPayment);
 router.patch('/owner-payments/:id/status', updateOwnerPaymentStatus);
 router.delete('/owner-payments/:id', deleteOwnerPayment);
 
-router.get('/settings', cacheResponse({ ttlMs: 30000 }), getSystemSettings);
+router.get('/settings', getSystemSettings);
 router.post('/settings', updateSystemSetting);
 
 module.exports = router;

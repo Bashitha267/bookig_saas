@@ -11,8 +11,8 @@ const { cacheResponse } = require('../middleware/cache.middleware');
 
 const router = express.Router();
 
-router.get('/', authenticateOptional, cacheResponse({ ttlMs: 10000 }), listProperties);
-router.get('/:id', authenticateOptional, cacheResponse({ ttlMs: 10000 }), getProperty);
+router.get('/', authenticateOptional, listProperties);
+router.get('/:id', authenticateOptional, getProperty);
 
 router.use(authenticate);
 

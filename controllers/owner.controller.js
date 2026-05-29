@@ -91,6 +91,12 @@ async function getSystemStatus(req, res) {
       status = 'partial';
     }
 
+    const userRows = await db.query(
+      "SELECT packagePrice, yearlyPrice, yearlyDiscount FROM user WHERE id = ?",
+      [ownerId]
+    );
+    const user = userRows.length ? userRows[0] : {};
+
     return res.json({
       monthName,
       globalFee,
@@ -98,7 +104,10 @@ async function getSystemStatus(req, res) {
       pendingPaid,
       remaining,
       status,
-      latestBilling
+      latestBilling,
+      ownerPackagePrice: user.packagePrice,
+      yearlyPrice: user.yearlyPrice,
+      yearlyDiscount: user.yearlyDiscount,
     });
   } catch (error) {
     return res.status(500).json({ message: 'Error', error: error.message });
