@@ -505,7 +505,7 @@ async function createOwnerPayment(req, res) {
     const discountAmt = Number(discount || 0);
     const promoFlag = isPromotion ? 1 : 0;
 
-    // ── Case 1: Promotion / Free Trial ──────────────────────────────────
+    // ── Case 1: Promotion / Free Trial ───────────────────────────────────────────
     if (isPromotion && periodStart && periodEnd) {
       // Look up owner's custom price or global price for the "waived" value
       const ownerRows = await db.query(
@@ -518,11 +518,22 @@ async function createOwnerPayment(req, res) {
       const ownerPrice = ownerRows.length && ownerRows[0].packagePrice !== null
         ? Number(ownerRows[0].packagePrice) : globalFee;
 
-      // Create a billing record marked as promotion (amountDue = owner's price, amountPaid = same → paid)
+      // ON DUPLICATE KEY UPDATE handles the case where a regular billing record
+      // already exists for this period (unique key: ownerId+periodStart+periodEnd).
+      // It converts that record into a promotion instead of throwing a duplicate error.
       await db.execute(
         `INSERT INTO owner_billing
           (ownerId, periodStart, periodEnd, amountDue, amountPaid, status, isPromotion, billingCycle, discount, note, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, 'paid', 1, ?, 0, ?, NOW(), NOW())`,
+         VALUES (?, ?, ?, ?, ?, 'paid', 1, ?, 0, ?, NOW(), NOW())
+         ON DUPLICATE KEY UPDATE
+           amountDue    = VALUES(amountDue),
+           amountPaid   = VALUES(amountPaid),
+           status       = 'paid',
+           isPromotion  = 1,
+           billingCycle = VALUES(billingCycle),
+           discount     = 0,
+           note         = COALESCE(VALUES(note), note),
+           updatedAt    = NOW()`,
         [ownerId, periodStart, periodEnd, ownerPrice, ownerPrice, cycle, note || null]
       );
 
