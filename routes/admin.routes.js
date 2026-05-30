@@ -17,6 +17,7 @@ const {
 	updateSystemSetting,
 	listRecentLoggedUsers,
 	listOnlineUsers,
+	getRevenueReport,
 } = require('../controllers/admin.controller');
 const { authenticate, authorizeRoles } = require('../middleware/auth.middleware');
 const { cacheResponse } = require('../middleware/cache.middleware');
@@ -46,5 +47,7 @@ router.delete('/owner-payments/:id', deleteOwnerPayment);
 
 router.get('/settings', getSystemSettings);
 router.post('/settings', updateSystemSetting);
+
+router.get('/reports/revenue', getRevenueReport);
 
 module.exports = router;

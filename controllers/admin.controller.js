@@ -78,6 +78,7 @@ async function listOwners(req, res) {
     const { q, status } = req.query;
     const sqlParts = [
       "SELECT u.id, u.firstName, u.lastName, u.username, u.contact, u.address, u.email, u.status, u.createdAt,",
+      'u.packagePrice, u.yearlyPrice, u.yearlyDiscount,',
       'COUNT(DISTINCT p.id) AS propertyCount,',
       'COUNT(DISTINCT s.id) AS staffCount,',
       'MAX(ob.status) AS currentBillingStatus,',
@@ -744,6 +745,160 @@ async function listOnlineUsers(req, res) {
   }
 }
 
+/**
+ * GET /admin/reports/revenue?year=YYYY
+ * Returns a full monthly revenue report for the given year.
+ * - Uses real per-owner prices (packagePrice > globalFee fallback)
+ * - Yearly billing is spread across 12 months (amountDue / 12 per month)
+ * - Tracks promotions separately
+ */
+async function getRevenueReport(req, res) {
+  const { year } = req.query;
+  const y = Number.parseInt(year, 10) || new Date().getFullYear();
+
+  try {
+    // Global fee
+    const settingsRows = await db.query("SELECT value FROM system_settings WHERE `key` = 'global_billing_amount' LIMIT 1");
+    const globalFee = settingsRows.length ? Number(settingsRows[0].value) : 0;
+
+    // All owners with their prices
+    const owners = await db.query(
+      "SELECT id, firstName, lastName, username, packagePrice, yearlyPrice, yearlyDiscount, createdAt FROM `user` WHERE role = 'owner' ORDER BY id ASC"
+    );
+
+    // All billing records for this year (regular + promotions)
+    const billing = await db.query(
+      `SELECT ob.*, u.firstName, u.lastName, u.username, u.packagePrice, u.yearlyPrice
+       FROM owner_billing ob
+       JOIN \`user\` u ON ob.ownerId = u.id
+       WHERE YEAR(ob.periodStart) = ? OR YEAR(ob.periodEnd) = ?`,
+      [y, y]
+    );
+
+    // All approved payments for this year
+    const payments = await db.query(
+      `SELECT op.*, u.firstName, u.lastName, u.username
+       FROM owner_payment op
+       JOIN \`user\` u ON op.ownerId = u.id
+       WHERE op.status = 'approved'
+         AND (YEAR(op.paidAt) = ? OR YEAR(op.createdAt) = ?)`,
+      [y, y]
+    );
+
+    // Build month slots [0..11]
+    const months = Array.from({ length: 12 }, (_, i) => ({
+      monthIndex: i,
+      revenue: 0,
+      promotionValue: 0,
+      promotionCount: 0,
+      expectedDue: 0,
+      newOwners: 0,
+      ownerCount: 0,
+    }));
+
+    // Count owner-months for expectedDue (owners active in each month)
+    owners.forEach((owner) => {
+      const created = new Date(owner.createdAt);
+      const ownerYear = created.getFullYear();
+      const startMonth = ownerYear < y ? 0 : (ownerYear === y ? created.getMonth() : 999);
+      if (ownerYear > y) return;
+
+      const ownerMonthlyPrice = owner.packagePrice != null ? Number(owner.packagePrice) : globalFee;
+
+      if (ownerYear === y) {
+        months[created.getMonth()].newOwners += 1;
+      }
+
+      for (let i = startMonth; i < 12; i++) {
+        months[i].ownerCount += 1;
+        months[i].expectedDue += ownerMonthlyPrice;
+      }
+    });
+
+    // Process billing records (promotions + regular)
+    billing.forEach((bill) => {
+      const start = new Date(bill.periodStart);
+      const end = new Date(bill.periodEnd);
+      if (bill.isPromotion) {
+        // Assign promotion to the start month if it falls in this year
+        const mIdx = start.getMonth();
+        if (start.getFullYear() === y || end.getFullYear() === y) {
+          months[mIdx].promotionValue += Number(bill.amountDue || 0);
+          months[mIdx].promotionCount += 1;
+        }
+      }
+      // For yearly billing spread across months
+      if (bill.billingCycle === 'yearly' && bill.amountDue > 0) {
+        const perMonth = Number(bill.amountDue) / 12;
+        for (let i = 0; i < 12; i++) {
+          // Only count if the year matches
+          const monthYear = start.getFullYear();
+          if (monthYear === y) {
+            // already handled via payments
+          }
+        }
+      }
+    });
+
+    // Process approved payments — credit to the month paid
+    payments.forEach((p) => {
+      const date = new Date(p.paidAt || p.createdAt);
+      if (date.getFullYear() !== y) return;
+      const mIdx = date.getMonth();
+
+      // Find the linked billing record to check if yearly
+      const linkedBill = billing.find(b => b.id === p.billingId);
+      if (linkedBill && linkedBill.billingCycle === 'yearly') {
+        // Spread the yearly payment across 12 months
+        const perMonth = Number(p.amount) / 12;
+        for (let i = 0; i < 12; i++) {
+          months[i].revenue += perMonth;
+        }
+      } else {
+        months[mIdx].revenue += Number(p.amount || 0);
+      }
+    });
+
+    // Totals
+    const totalRevenue = months.reduce((s, m) => s + m.revenue, 0);
+    const totalExpected = months.reduce((s, m) => s + m.expectedDue, 0);
+    const totalPromotions = months.reduce((s, m) => s + m.promotionCount, 0);
+    const totalPromotionValue = months.reduce((s, m) => s + m.promotionValue, 0);
+
+    // Owner-level breakdown
+    const ownerBreakdown = owners.map((owner) => {
+      const ownerBills = billing.filter(b => b.ownerId === owner.id);
+      const ownerPayments = payments.filter(p => p.ownerId === owner.id);
+      const ownerPrice = owner.packagePrice != null ? Number(owner.packagePrice) : globalFee;
+      const totalPaid = ownerPayments.reduce((s, p) => s + Number(p.amount || 0), 0);
+      const promos = ownerBills.filter(b => b.isPromotion);
+      return {
+        id: owner.id,
+        name: `${owner.firstName} ${owner.lastName}`,
+        username: owner.username,
+        monthlyPrice: ownerPrice,
+        totalPaid,
+        promotionCount: promos.length,
+        promotionMonths: promos.map(p => ({
+          start: p.periodStart,
+          end: p.periodEnd,
+          value: Number(p.amountDue),
+        })),
+      };
+    });
+
+    return res.json({
+      year: y,
+      globalFee,
+      months,
+      totals: { totalRevenue, totalExpected, totalPromotions, totalPromotionValue, outstanding: Math.max(0, totalExpected - totalRevenue - totalPromotionValue) },
+      ownerBreakdown,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to generate report', error: error.message });
+  }
+}
+
 module.exports = {
   listOwners,
   getOwner,
@@ -761,4 +916,5 @@ module.exports = {
   updateSystemSetting,
   listRecentLoggedUsers,
   listOnlineUsers,
+  getRevenueReport,
 };

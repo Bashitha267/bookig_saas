@@ -53,14 +53,38 @@ async function getSystemStatus(req, res) {
     const settingsRows = await db.query("SELECT `value` FROM system_settings WHERE `key` = 'global_billing_amount' LIMIT 1");
     const globalFee = settingsRows.length ? Number(settingsRows[0].value) : 0;
 
-    const billingRows = await db.query(
-      "SELECT * FROM owner_billing WHERE ownerId = ? ORDER BY periodEnd DESC LIMIT 1",
+    const userRows = await db.query(
+      "SELECT packagePrice, yearlyPrice, yearlyDiscount FROM user WHERE id = ?",
       [ownerId]
     );
-    
+    const user = userRows.length ? userRows[0] : {};
+    const ownerMonthlyPrice = user.packagePrice != null ? Number(user.packagePrice) : globalFee;
+
     const now = new Date();
     const monthName = now.toLocaleString('default', { month: 'long' });
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const todayStr = now.toISOString().split('T')[0];
+
+    // Check if the current month has a promotion billing record
+    const promotionRows = await db.query(
+      `SELECT * FROM owner_billing 
+       WHERE ownerId = ? AND isPromotion = 1 
+         AND periodStart <= ? AND periodEnd >= ?
+       ORDER BY periodStart DESC LIMIT 1`,
+      [ownerId, todayStr, todayStr]
+    );
+    const currentPromotion = promotionRows.length ? promotionRows[0] : null;
+
+    // Get the current regular (non-promotion) billing record for this month
+    const billingRows = await db.query(
+      `SELECT * FROM owner_billing 
+       WHERE ownerId = ? AND isPromotion = 0 
+         AND periodStart <= ? AND periodEnd >= ?
+       ORDER BY periodStart DESC LIMIT 1`,
+      [ownerId, todayStr, todayStr]
+    );
+    const latestBilling = billingRows.length ? billingRows[0] : null;
+    const amountDue = latestBilling ? Number(latestBilling.amountDue) : ownerMonthlyPrice;
     
     // Get all payments for this month grouped by status
     const paymentRows = await db.query(
@@ -74,28 +98,18 @@ async function getSystemStatus(req, res) {
       if (row.status === 'approved') approvedPaid = Number(row.total);
       if (row.status === 'pending') pendingPaid = Number(row.total);
     });
-
-    const latestBilling = billingRows.length ? billingRows[0] : null;
-    const amountDue = latestBilling ? Number(latestBilling.amountDue) : globalFee;
     
     // Remaining is what's left after approved payments
     const remaining = Math.max(0, amountDue - approvedPaid);
     
     let status = 'unpaid';
-    // If it's fully paid (approved)
-    if (remaining <= 0 && amountDue > 0) {
+    if (currentPromotion) {
+      status = 'promotion';
+    } else if (remaining <= 0 && amountDue > 0) {
       status = 'paid';
-    } 
-    // If there's any payment activity (pending or approved but not full)
-    else if (pendingPaid > 0 || approvedPaid > 0) {
+    } else if (pendingPaid > 0 || approvedPaid > 0) {
       status = 'partial';
     }
-
-    const userRows = await db.query(
-      "SELECT packagePrice, yearlyPrice, yearlyDiscount FROM user WHERE id = ?",
-      [ownerId]
-    );
-    const user = userRows.length ? userRows[0] : {};
 
     return res.json({
       monthName,
@@ -108,6 +122,8 @@ async function getSystemStatus(req, res) {
       ownerPackagePrice: user.packagePrice,
       yearlyPrice: user.yearlyPrice,
       yearlyDiscount: user.yearlyDiscount,
+      isCurrentMonthPromotion: !!currentPromotion,
+      currentPromotion,
     });
   } catch (error) {
     return res.status(500).json({ message: 'Error', error: error.message });
