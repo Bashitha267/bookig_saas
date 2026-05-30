@@ -884,6 +884,45 @@ async function getRevenueReport(req, res) {
       const ownerPrice = owner.packagePrice != null ? Number(owner.packagePrice) : globalFee;
       const totalPaid = ownerPayments.reduce((s, p) => s + Number(p.amount || 0), 0);
       const promos = ownerBills.filter(b => b.isPromotion);
+
+      // Build 12-month breakdown for this owner
+      const monthlyData = Array.from({ length: 12 }, (_, i) => ({
+        monthIndex: i,
+        paid: 0,
+        isPromotion: false,
+        promoValue: 0
+      }));
+
+      // Populate monthly bills (promotions)
+      ownerBills.forEach(b => {
+        const start = new Date(b.periodStart);
+        const mIdx = start.getMonth();
+        if (start.getFullYear() === y) {
+          if (b.isPromotion) {
+            monthlyData[mIdx].isPromotion = true;
+            monthlyData[mIdx].promoValue = Number(b.amountDue || 0);
+          }
+        }
+      });
+
+      // Populate monthly payments
+      ownerPayments.forEach(p => {
+        const date = new Date(p.paidAt || p.createdAt);
+        if (date.getFullYear() !== y) return;
+        const mIdx = date.getMonth();
+
+        const linkedBill = billing.find(b => b.id === p.billingId);
+        if (linkedBill && linkedBill.billingCycle === 'yearly') {
+          // Spread yearly payment
+          const perMonth = Number(p.amount) / 12;
+          for (let i = 0; i < 12; i++) {
+            monthlyData[i].paid += perMonth;
+          }
+        } else {
+          monthlyData[mIdx].paid += Number(p.amount || 0);
+        }
+      });
+
       return {
         id: owner.id,
         name: `${owner.firstName} ${owner.lastName}`,
@@ -896,6 +935,7 @@ async function getRevenueReport(req, res) {
           end: p.periodEnd,
           value: Number(p.amountDue),
         })),
+        monthlyData,
       };
     });
 
