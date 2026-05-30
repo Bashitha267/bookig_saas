@@ -83,7 +83,8 @@ async function listOwners(req, res) {
       'COUNT(DISTINCT s.id) AS staffCount,',
       'MAX(ob.status) AS currentBillingStatus,',
       'MAX(ob.amountDue) AS currentAmountDue,',
-      'MAX(ob.amountPaid) AS currentAmountPaid',
+      'MAX(ob.amountPaid) AS currentAmountPaid,',
+      'MAX(ob.isPromotion) AS currentIsPromotion',
       'FROM `user` u',
       'LEFT JOIN property p ON p.ownerId = u.id',
       "LEFT JOIN `user` s ON s.ownerId = u.id AND s.role = 'staff'",
@@ -141,7 +142,7 @@ async function getOwner(req, res) {
     );
 
     const billingRows = await db.query(
-      'SELECT id, periodStart, periodEnd, amountDue, amountPaid, status FROM owner_billing WHERE ownerId = ? AND periodStart <= CURRENT_DATE() AND periodEnd >= CURRENT_DATE() ORDER BY periodStart DESC LIMIT 1',
+      'SELECT id, periodStart, periodEnd, amountDue, amountPaid, status, isPromotion, billingCycle, discount, note FROM owner_billing WHERE ownerId = ? AND periodStart <= CURRENT_DATE() AND periodEnd >= CURRENT_DATE() ORDER BY periodStart DESC LIMIT 1',
       [id]
     );
 
