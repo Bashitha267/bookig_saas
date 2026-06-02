@@ -351,46 +351,156 @@ async function getOwnerBillingSummary(req, res) {
       return res.status(400).json({ message: error });
     }
 
-    const baseParts = [
-      'FROM owner_billing ob',
-      'JOIN `user` u ON ob.ownerId = u.id',
-      "WHERE u.role = 'owner'",
-    ];
-    const baseParams = [];
+    // 1. Fetch system settings for global_billing_amount
+    const settingsRows = await db.query("SELECT value FROM system_settings WHERE `key` = 'global_billing_amount' LIMIT 1");
+    const globalFee = settingsRows.length ? Number(settingsRows[0].value) : 0;
 
+    // 2. Fetch all matching owners
+    const ownerSql = ["SELECT id, firstName, lastName, username, contact, packagePrice, createdAt FROM `user` WHERE role = 'owner'"];
+    const ownerParams = [];
     if (ownerId) {
-      baseParts.push('AND ob.ownerId = ?');
-      baseParams.push(ownerId);
-    }
-    if (status) {
-      baseParts.push('AND ob.status = ?');
-      baseParams.push(status);
+      ownerSql.push('AND id = ?');
+      ownerParams.push(ownerId);
     }
     if (q) {
       const like = `%${q}%`;
-      baseParts.push('AND (u.firstName LIKE ? OR u.lastName LIKE ? OR u.username LIKE ? OR u.contact LIKE ?)');
-      baseParams.push(like, like, like, like);
+      ownerSql.push('AND (firstName LIKE ? OR lastName LIKE ? OR username LIKE ? OR contact LIKE ?)');
+      ownerParams.push(like, like, like, like);
     }
-    applyDateOverlap(baseParts, baseParams, 'ob', startDate, endDate);
+    const owners = await db.query(ownerSql.join(' '), ownerParams);
 
-    // Revenue summary (exclude promotions)
-    const revenueParts = [
-      'SELECT',
-      'COUNT(*) AS totalCount,',
-      'SUM(CASE WHEN ob.isPromotion = 0 THEN ob.amountDue ELSE 0 END) AS totalDue,',
-      'SUM(CASE WHEN ob.isPromotion = 0 THEN ob.amountPaid ELSE 0 END) AS totalPaid,',
-      "SUM(CASE WHEN ob.isPromotion = 0 AND ob.status = 'paid' THEN 1 ELSE 0 END) AS paidCount,",
-      "SUM(CASE WHEN ob.isPromotion = 0 AND ob.status IN ('pending','partial','overdue') THEN 1 ELSE 0 END) AS unpaidCount,",
-      // Promotion metrics
-      'SUM(CASE WHEN ob.isPromotion = 1 THEN 1 ELSE 0 END) AS promotionCount,',
-      'SUM(CASE WHEN ob.isPromotion = 1 THEN ob.amountDue ELSE 0 END) AS promotionValue,',
-      // Discount totals
-      'SUM(CASE WHEN ob.isPromotion = 0 THEN ob.discount ELSE 0 END) AS totalDiscount',
-      ...baseParts,
+    // 3. Fetch all matching actual billing records
+    const billingSql = [
+      'SELECT ob.* FROM owner_billing ob',
+      'JOIN `user` u ON ob.ownerId = u.id',
+      "WHERE u.role = 'owner'"
     ];
+    const billingParams = [];
+    if (ownerId) {
+      billingSql.push('AND ob.ownerId = ?');
+      billingParams.push(ownerId);
+    }
+    if (q) {
+      const like = `%${q}%`;
+      billingSql.push('AND (u.firstName LIKE ? OR u.lastName LIKE ? OR u.username LIKE ? OR u.contact LIKE ?)');
+      billingParams.push(like, like, like, like);
+    }
+    applyDateOverlap(billingSql, billingParams, 'ob', startDate, endDate);
+    const billingRecords = await db.query(billingSql.join(' '), billingParams);
 
-    const rows = await db.query(revenueParts.join(' '), baseParams);
-    return res.json({ data: rows[0] || {} });
+    // Determine simulation range bounds
+    let rangeStart = null;
+    let rangeEnd = null;
+
+    if (startDate) {
+      rangeStart = new Date(startDate);
+    } else if (owners.length > 0) {
+      const minDate = owners.reduce((min, o) => {
+        const d = new Date(o.createdAt);
+        return d < min ? d : min;
+      }, new Date(owners[0].createdAt));
+      rangeStart = minDate;
+    } else {
+      rangeStart = new Date();
+    }
+
+    if (endDate) {
+      rangeEnd = new Date(endDate);
+    } else {
+      rangeEnd = new Date();
+    }
+
+    // Initialize summary metrics
+    let totalCount = 0;
+    let totalDue = 0;
+    let totalPaid = 0;
+    let paidCount = 0;
+    let unpaidCount = 0;
+    let promotionCount = 0;
+    let promotionValue = 0;
+    let totalDiscount = 0;
+
+    const processedBillingIds = new Set();
+
+    owners.forEach((owner) => {
+      const ownerBills = billingRecords.filter(b => b.ownerId === owner.id);
+
+      // Accumulate actual billing records in the range
+      ownerBills.forEach((bill) => {
+        if (!processedBillingIds.has(bill.id)) {
+          processedBillingIds.add(bill.id);
+
+          // Apply status filter if provided
+          if (status) {
+            if (status === 'promotions' && bill.isPromotion !== 1) return;
+            if (status !== 'promotions' && (bill.status !== status || bill.isPromotion === 1)) return;
+          }
+
+          if (bill.isPromotion === 1) {
+            promotionCount++;
+            promotionValue += Number(bill.amountDue || 0);
+          } else {
+            totalCount++;
+            totalDue += Number(bill.amountDue || 0);
+            totalPaid += Number(bill.amountPaid || 0);
+            totalDiscount += Number(bill.discount || 0);
+
+            if (bill.status === 'paid') {
+              paidCount++;
+            } else {
+              unpaidCount++;
+            }
+          }
+        }
+      });
+
+      // Simulation of missing monthly periods
+      const startYear = rangeStart.getFullYear();
+      const startMonth = rangeStart.getMonth();
+      const endYear = rangeEnd.getFullYear();
+      const endMonth = rangeEnd.getMonth();
+
+      for (let y = startYear; y <= endYear; y++) {
+        const mStartIdx = (y === startYear) ? startMonth : 0;
+        const mEndIdx = (y === endYear) ? endMonth : 11;
+        for (let m = mStartIdx; m <= mEndIdx; m++) {
+          const mStart = new Date(y, m, 1);
+          const mEnd = new Date(y, m + 1, 0);
+
+          const createdDate = new Date(owner.createdAt);
+          const isOwnerActive = createdDate <= mEnd;
+          // Check if any actual billing record covers this month
+          const isCovered = ownerBills.some(b => {
+            const bStart = new Date(b.periodStart);
+            const bEnd = new Date(b.periodEnd);
+            return bStart <= mEnd && bEnd >= mStart;
+          });
+
+          if (isOwnerActive && !isCovered) {
+            // Apply status filter if provided (simulated records are always 'pending')
+            if (!status || status === 'pending') {
+              const simulatedDue = owner.packagePrice !== null ? Number(owner.packagePrice) : globalFee;
+              totalCount++;
+              totalDue += simulatedDue;
+              unpaidCount++;
+            }
+          }
+        }
+      }
+    });
+
+    return res.json({
+      data: {
+        totalCount,
+        totalDue,
+        totalPaid,
+        paidCount,
+        unpaidCount,
+        promotionCount,
+        promotionValue,
+        totalDiscount
+      }
+    });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to load billing summary', error: error.message });
   }
