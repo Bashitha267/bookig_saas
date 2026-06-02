@@ -84,7 +84,7 @@ async function getPayment(req, res) {
 }
 
 async function createPayment(req, res) {
-  const { bookingId, amount, currency, method, status, paidAt } = req.body;
+  const { bookingId, amount, currency, method, status, paidAt, note } = req.body;
   if (!bookingId || amount === undefined) {
     return res.status(400).json({ message: 'bookingId and amount are required' });
   }
@@ -107,8 +107,8 @@ async function createPayment(req, res) {
 
     const result = await db.execute(
       `INSERT INTO payment
-        (ownerId, bookingId, amount, currency, method, status, paidAt, createdAt, updatedAt)
-       VALUES (?,?,?,?,?,?,?,NOW(),NOW())`,
+        (ownerId, bookingId, amount, currency, method, status, paidAt, note, createdAt, updatedAt)
+       VALUES (?,?,?,?,?,?,?,?,NOW(),NOW())`,
       [
         insertOwnerId,
         bookingId,
@@ -117,6 +117,7 @@ async function createPayment(req, res) {
         method || 'cash',
         status || 'paid',
         paidAt || null,
+        note || null,
       ]
     );
 
@@ -141,7 +142,7 @@ async function updatePayment(req, res) {
       return res.status(404).json({ message: 'Payment not found' });
     }
 
-    const fields = ['amount', 'currency', 'method', 'status', 'paidAt'];
+    const fields = ['amount', 'currency', 'method', 'status', 'paidAt', 'note'];
     const { updates, params } = buildUpdate(fields, req.body);
     if (!updates.length) {
       return res.status(400).json({ message: 'No valid fields to update' });

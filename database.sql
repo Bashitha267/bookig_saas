@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS `payment` (
 	`method` enum('cash','card','bank','online') NOT NULL DEFAULT 'cash',
 	`status` enum('pending','paid','refunded') NOT NULL DEFAULT 'paid',
 	`paidAt` datetime(3) DEFAULT NULL,
+	`note` varchar(255) DEFAULT NULL,
 	`createdAt` datetime(3) NOT NULL DEFAULT current_timestamp(3),
 	`updatedAt` datetime(3) NOT NULL,
 	PRIMARY KEY (`id`),

@@ -23,7 +23,7 @@ async function listBookings(req, res) {
     const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId;
 
     let sql = `
-      SELECT b.*, r.roomNumber, r.roomType, r.propertyId AS propertyId, p.name AS propertyName
+      SELECT b.*, r.roomNumber, r.roomType, r.price AS roomPrice, r.propertyId AS propertyId, p.name AS propertyName
       FROM booking b
       LEFT JOIN room r ON b.roomId = r.id
       LEFT JOIN property p ON r.propertyId = p.id
@@ -60,7 +60,7 @@ async function getBooking(req, res) {
     const requestedPropertyId = req.query.propertyId ? Number(req.query.propertyId) : null;
     const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId;
     let sql = `
-      SELECT b.*, r.roomNumber, r.roomType, r.propertyId AS propertyId, p.name AS propertyName
+      SELECT b.*, r.roomNumber, r.roomType, r.price AS roomPrice, r.propertyId AS propertyId, p.name AS propertyName
       FROM booking b
       LEFT JOIN room r ON b.roomId = r.id
       LEFT JOIN property p ON r.propertyId = p.id
