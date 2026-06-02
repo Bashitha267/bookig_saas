@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const db = require('../lib/db');
 
 async function getMyBilling(req, res) {
@@ -35,11 +37,40 @@ async function submitPayment(req, res) {
   }
 
   try {
+    let savedProofUrl = null;
+    if (proofUrl && proofUrl.startsWith('data:')) {
+      const match = proofUrl.match(/^data:(image\/[a-zA-Z]+|application\/pdf);base64,(.+)$/);
+      if (match) {
+        const mimeType = match[1];
+        const base64Data = match[2];
+        let ext = '.png';
+        if (mimeType === 'application/pdf') {
+          ext = '.pdf';
+        } else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) {
+          ext = '.jpg';
+        } else if (mimeType.includes('gif')) {
+          ext = '.gif';
+        }
+        
+        const uploadsDir = path.join(__dirname, '..', 'uploads');
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        
+        const fileName = `proof-${ownerId}-${Date.now()}${ext}`;
+        const filePath = path.join(uploadsDir, fileName);
+        fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+        savedProofUrl = `/uploads/${fileName}`;
+      }
+    } else if (proofUrl) {
+      savedProofUrl = proofUrl;
+    }
+
     const result = await db.execute(
       `INSERT INTO owner_payment 
         (ownerId, billingId, amount, currency, method, status, createdAt, updatedAt, note, proofUrl) 
        VALUES (?, ?, ?, 'LKR', ?, 'pending', NOW(), NOW(), ?, ?)`,
-      [ownerId, billingId || null, amount, method || 'bank', note || null, proofUrl || null]
+      [ownerId, billingId || null, amount, method || 'bank', note || null, savedProofUrl]
     );
     return res.status(201).json({ message: 'Payment submitted for approval', id: result.insertId });
   } catch (error) {

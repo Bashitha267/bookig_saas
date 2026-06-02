@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const compression = require('compression');
+const path = require('path');
 const app = express();
 
 const authRoutes = require('./routes/auth.routes');
@@ -18,8 +19,9 @@ app.options(/.*/, cors());
 app.use(compression());
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: false, limit: '1mb' }));
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: false, limit: '15mb' }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const PORT = process.env.PORT || 5000;
 
