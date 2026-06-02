@@ -515,9 +515,10 @@ async function listOwnerPayments(req, res) {
     }
 
     const sqlParts = [
-      'SELECT op.*, u.firstName, u.lastName, u.username, u.contact',
+      'SELECT op.*, u.firstName, u.lastName, u.username, u.contact, ob.amountDue AS billingAmountDue, ob.amountPaid AS billingAmountPaid',
       'FROM owner_payment op',
       'JOIN `user` u ON op.ownerId = u.id',
+      'LEFT JOIN owner_billing ob ON ob.id = op.billingId',
       "WHERE u.role = 'owner'",
     ];
     const params = [];
