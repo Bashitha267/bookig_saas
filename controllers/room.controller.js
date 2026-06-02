@@ -106,6 +106,7 @@ async function createRoom(req, res) {
     capacityChildren,
     price,
     status,
+    hasAc,
   } = req.body;
 
   if (!propertyId || !roomNumber || !roomType) {
@@ -130,8 +131,8 @@ async function createRoom(req, res) {
 
     const result = await db.execute(
       `INSERT INTO room
-        (propertyId, ownerId, roomNumber, roomType, floor, capacityAdults, capacityChildren, price, status, createdAt, updatedAt)
-       VALUES (?,?,?,?,?,?,?,?,?,NOW(),NOW())`,
+        (propertyId, ownerId, roomNumber, roomType, floor, capacityAdults, capacityChildren, price, status, hasAc, createdAt, updatedAt)
+       VALUES (?,?,?,?,?,?,?,?,?,?,NOW(),NOW())`,
       [
         propertyId,
         insertOwnerId,
@@ -142,6 +143,7 @@ async function createRoom(req, res) {
         capacityChildren || 0,
         price || 0,
         status || 'available',
+        hasAc ? 1 : 0,
       ]
     );
 
@@ -187,6 +189,7 @@ async function updateRoom(req, res) {
       'capacityChildren',
       'price',
       'status',
+      'hasAc',
     ];
     const { updates, params } = buildUpdate(fields, req.body);
     if (!updates.length) {
