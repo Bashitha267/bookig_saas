@@ -100,6 +100,7 @@ async function createBooking(req, res) {
     children,
     status,
     notes,
+    discount,
   } = req.body;
 
   if (!roomId || !guestName || !guestContact || !checkInDate || !checkOutDate) {
@@ -125,8 +126,8 @@ async function createBooking(req, res) {
 
     const result = await db.execute(
       `INSERT INTO booking
-        (ownerId, roomId, guestName, guestContact, guestNic, checkInDate, checkOutDate, adults, children, status, notes, createdBy, createdAt, updatedAt)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())`,
+        (ownerId, roomId, guestName, guestContact, guestNic, checkInDate, checkOutDate, adults, children, status, notes, createdBy, discount, createdAt, updatedAt)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())`,
       [
         insertOwnerId,
         roomId,
@@ -140,6 +141,7 @@ async function createBooking(req, res) {
         status || 'pending',
         notes || null,
         createdBy,
+        discount || 0.00,
       ]
     );
 
@@ -191,6 +193,7 @@ async function updateBooking(req, res) {
       'status',
       'notes',
       'expenses',
+      'discount',
     ];
     const { updates, params } = buildUpdate(fields, req.body);
     if (!updates.length) {

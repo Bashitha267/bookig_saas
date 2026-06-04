@@ -171,9 +171,79 @@ async function logout(req, res) {
   }
 }
 
+async function forgotPassword(req, res) {
+  const { usernameOrEmail } = req.body;
+  if (!usernameOrEmail) {
+    return res.status(400).json({ message: 'Username or Email is required' });
+  }
+
+  try {
+    const rows = await db.query(
+      'SELECT id, username, firstName, email FROM `user` WHERE username = ? OR email = ? LIMIT 1',
+      [usernameOrEmail, usernameOrEmail]
+    );
+    const user = rows && rows.length ? rows[0] : null;
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found with this username or email' });
+    }
+
+    if (!user.email) {
+      return res.status(400).json({ message: 'No email address associated with this account' });
+    }
+
+    const resetToken = jwt.sign(
+      { userId: user.id, username: user.username, email: user.email, purpose: 'reset-password' },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    return res.status(200).json({
+      message: 'Reset token generated successfully',
+      token: resetToken,
+      email: user.email,
+      name: user.firstName || user.username
+    });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to process forgot password request', error: error.message });
+  }
+}
+
+async function resetPassword(req, res) {
+  const { token, newPassword } = req.body;
+  if (!token || !newPassword) {
+    return res.status(400).json({ message: 'Token and new password are required' });
+  }
+
+  try {
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      return res.status(400).json({ message: 'Invalid or expired reset token' });
+    }
+
+    if (decoded.purpose !== 'reset-password') {
+      return res.status(400).json({ message: 'Invalid token purpose' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await db.execute('UPDATE `user` SET password = ?, updatedAt = NOW() WHERE id = ?', [
+      hashedPassword,
+      decoded.userId
+    ]);
+
+    return res.status(200).json({ message: 'Password reset successfully' });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to reset password', error: error.message });
+  }
+}
+
 module.exports = {
   registerOwner,
   login,
   logout,
   setCurrentProperty,
+  forgotPassword,
+  resetPassword,
 };
