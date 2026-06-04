@@ -193,17 +193,20 @@ async function forgotPassword(req, res) {
       return res.status(400).json({ message: 'No email address associated with this account' });
     }
 
-    const resetToken = jwt.sign(
-      { userId: user.id, username: user.username, email: user.email, purpose: 'reset-password' },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+    // Generate a random 6-digit numeric OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Store in DB, set to expire in 15 minutes
+    await db.execute(
+      'UPDATE `user` SET reset_otp = ?, reset_otp_expires = DATE_ADD(NOW(), INTERVAL 15 MINUTE), updatedAt = NOW() WHERE id = ?',
+      [otp, user.id]
     );
 
     return res.status(200).json({
-      message: 'Reset token generated successfully',
-      token: resetToken,
+      message: 'OTP generated successfully',
       email: user.email,
-      name: user.firstName || user.username
+      name: user.firstName || user.username,
+      otp: otp
     });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to process forgot password request', error: error.message });
@@ -211,30 +214,63 @@ async function forgotPassword(req, res) {
 }
 
 async function resetPassword(req, res) {
-  const { token, newPassword } = req.body;
-  if (!token || !newPassword) {
-    return res.status(400).json({ message: 'Token and new password are required' });
+  const { token, otp, usernameOrEmail, newPassword } = req.body;
+  if (!newPassword) {
+    return res.status(400).json({ message: 'New password is required' });
   }
 
   try {
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (err) {
-      return res.status(400).json({ message: 'Invalid or expired reset token' });
+    if (otp && usernameOrEmail) {
+      // 1. Verify via numeric OTP
+      const rows = await db.query(
+        'SELECT id, reset_otp, reset_otp_expires FROM `user` WHERE username = ? OR email = ? LIMIT 1',
+        [usernameOrEmail, usernameOrEmail]
+      );
+      const user = rows && rows.length ? rows[0] : null;
+
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      if (!user.reset_otp || user.reset_otp !== otp.toString().trim()) {
+        return res.status(400).json({ message: 'Invalid OTP code' });
+      }
+
+      const expiry = new Date(user.reset_otp_expires);
+      if (expiry < new Date()) {
+        return res.status(400).json({ message: 'OTP code has expired' });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await db.execute(
+        'UPDATE `user` SET password = ?, reset_otp = NULL, reset_otp_expires = NULL, updatedAt = NOW() WHERE id = ?',
+        [hashedPassword, user.id]
+      );
+
+      return res.status(200).json({ message: 'Password reset successfully' });
+    } else if (token) {
+      // 2. Legacy Token-based verification
+      let decoded;
+      try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET);
+      } catch (err) {
+        return res.status(400).json({ message: 'Invalid or expired reset token' });
+      }
+
+      if (decoded.purpose !== 'reset-password') {
+        return res.status(400).json({ message: 'Invalid token purpose' });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await db.execute('UPDATE `user` SET password = ?, reset_otp = NULL, reset_otp_expires = NULL, updatedAt = NOW() WHERE id = ?', [
+        hashedPassword,
+        decoded.userId
+      ]);
+
+      return res.status(200).json({ message: 'Password reset successfully' });
+    } else {
+      return res.status(400).json({ message: 'Either reset token or OTP & username/email is required' });
     }
-
-    if (decoded.purpose !== 'reset-password') {
-      return res.status(400).json({ message: 'Invalid token purpose' });
-    }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await db.execute('UPDATE `user` SET password = ?, updatedAt = NOW() WHERE id = ?', [
-      hashedPassword,
-      decoded.userId
-    ]);
-
-    return res.status(200).json({ message: 'Password reset successfully' });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to reset password', error: error.message });
   }
