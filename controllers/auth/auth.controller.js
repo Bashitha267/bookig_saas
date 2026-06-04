@@ -13,6 +13,7 @@ async function registerOwner(req, res) {
     firstName,
     lastName,
     username,
+    email,
     nicNumber,
     contact,
     whatsapp,
@@ -36,15 +37,15 @@ async function registerOwner(req, res) {
   }
 
   try {
-    const existing = await db.query('SELECT id FROM `user` WHERE contact = ? OR username = ? LIMIT 1', [contact, username]);
+    const existing = await db.query('SELECT id FROM `user` WHERE contact = ? OR username = ? OR email = ? LIMIT 1', [contact, username, email]);
     if (existing && existing.length > 0) {
-      return res.status(409).json({ message: 'Contact number or username already registered' });
+      return res.status(409).json({ message: 'Contact number, username, or email already registered' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const userResult = await db.execute(
-      'INSERT INTO `user` (firstName,lastName,username,nicNumber,contact,whatsapp,address,password,role,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,NOW(),NOW())',
-      [firstName, lastName, username, nicNumber || null, contact, whatsapp, address, hashedPassword, 'owner']
+      'INSERT INTO `user` (firstName,lastName,username,email,nicNumber,contact,whatsapp,address,password,role,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,NOW(),NOW())',
+      [firstName, lastName, username, email || null, nicNumber || null, contact, whatsapp, address, hashedPassword, 'owner']
     );
     const userId = userResult.insertId;
 
