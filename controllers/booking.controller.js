@@ -194,6 +194,8 @@ async function updateBooking(req, res) {
       'notes',
       'expenses',
       'discount',
+      'idStatus',
+      'idNote',
     ];
     const { updates, params } = buildUpdate(fields, req.body);
     if (!updates.length) {
