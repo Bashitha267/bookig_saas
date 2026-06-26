@@ -151,9 +151,13 @@ async function setCurrentProperty(req, res) {
       return res.status(403).json({ message: 'Only owner can set current property' });
     }
 
-    const propertyRows = await db.query('SELECT id FROM property WHERE id = ? AND ownerId = ? LIMIT 1', [propertyId, user.id]);
+    const propertyRows = await db.query('SELECT id, status FROM property WHERE id = ? AND ownerId = ? LIMIT 1', [propertyId, user.id]);
     if (!propertyRows.length) {
       return res.status(404).json({ message: 'Property not found' });
+    }
+
+    if (propertyRows[0].status === 'blocked') {
+      return res.status(403).json({ message: 'This property has been blocked by the admin' });
     }
 
     await db.execute('UPDATE `user` SET currentPropertyId = ? WHERE id = ?', [propertyId, user.id]);

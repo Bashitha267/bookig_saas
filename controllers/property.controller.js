@@ -16,16 +16,16 @@ function buildUpdate(fields, body) {
 async function listProperties(req, res) {
   try {
     const { ownerId, role, propertyId } = await resolveOwnerContext(req);
-    let sql = 'SELECT * FROM property';
+    let sql = 'SELECT p.*, u.firstName AS ownerFirstName, u.lastName AS ownerLastName, u.username AS ownerUsername FROM property p LEFT JOIN `user` u ON u.id = p.ownerId';
     const params = [];
     if (role === 'staff' && propertyId) {
-      sql += ' WHERE id = ?';
+      sql += " WHERE p.id = ? AND p.status <> 'blocked'";
       params.push(propertyId);
     } else if (ownerId) {
-      sql += ' WHERE ownerId = ?';
+      sql += " WHERE p.ownerId = ? AND p.status <> 'blocked'";
       params.push(ownerId);
     }
-    sql += ' ORDER BY id DESC';
+    sql += ' ORDER BY p.id DESC';
     const rows = await db.query(sql, params);
     return res.json({ data: rows });
   } catch (error) {
@@ -37,10 +37,10 @@ async function getProperty(req, res) {
   const { id } = req.params;
   try {
     const { ownerId } = await resolveOwnerContext(req);
-    let sql = 'SELECT * FROM property WHERE id = ?';
+    let sql = 'SELECT p.*, u.firstName AS ownerFirstName, u.lastName AS ownerLastName, u.username AS ownerUsername FROM property p LEFT JOIN `user` u ON u.id = p.ownerId WHERE p.id = ?';
     const params = [id];
     if (ownerId) {
-      sql += ' AND ownerId = ?';
+      sql += " AND p.ownerId = ? AND p.status <> 'blocked'";
       params.push(ownerId);
     }
     const rows = await db.query(sql, params);
