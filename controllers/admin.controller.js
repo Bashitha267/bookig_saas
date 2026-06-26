@@ -75,7 +75,17 @@ function applyDateRange(sqlParts, params, fieldName, startDate, endDate) {
 
 async function listOwners(req, res) {
   try {
-    const { q, status } = req.query;
+    const { q, status, year, month, paymentStatus } = req.query;
+    
+    const now = new Date();
+    const queryYear = year ? Number(year) : now.getFullYear();
+    const queryMonth = month ? Number(month) : (now.getMonth() + 1);
+    
+    const padMonth = String(queryMonth).padStart(2, '0');
+    const lastDay = new Date(queryYear, queryMonth, 0).getDate();
+    const periodStartStr = `${queryYear}-${padMonth}-01`;
+    const periodEndStr = `${queryYear}-${padMonth}-${String(lastDay).padStart(2, '0')}`;
+
     const sqlParts = [
       "SELECT u.id, u.firstName, u.lastName, u.username, u.contact, u.address, u.email, u.status, u.createdAt,",
       'u.packagePrice, u.yearlyPrice, u.yearlyDiscount,',
@@ -88,10 +98,10 @@ async function listOwners(req, res) {
       'FROM `user` u',
       'LEFT JOIN property p ON p.ownerId = u.id',
       "LEFT JOIN `user` s ON s.ownerId = u.id AND s.role = 'staff'",
-      'LEFT JOIN owner_billing ob ON ob.ownerId = u.id AND ob.periodStart <= CURRENT_DATE() AND ob.periodEnd >= CURRENT_DATE()',
+      'LEFT JOIN owner_billing ob ON ob.ownerId = u.id AND ob.periodStart <= ? AND ob.periodEnd >= ?',
       "WHERE u.role = 'owner'",
     ];
-    const params = [];
+    const params = [periodEndStr, periodStartStr];
 
     if (status) {
       sqlParts.push('AND u.status = ?');
@@ -102,6 +112,14 @@ async function listOwners(req, res) {
       const like = `%${q}%`;
       sqlParts.push('AND (u.firstName LIKE ? OR u.lastName LIKE ? OR u.username LIKE ? OR u.contact LIKE ? OR p.name LIKE ? OR s.firstName LIKE ? OR s.lastName LIKE ?)');
       params.push(like, like, like, like, like, like, like);
+    }
+
+    if (paymentStatus) {
+      if (paymentStatus === 'paid') {
+        sqlParts.push("AND (ob.status = 'paid' OR ob.isPromotion = 1)");
+      } else if (paymentStatus === 'unpaid') {
+        sqlParts.push("AND (ob.id IS NULL OR (ob.status <> 'paid' AND ob.isPromotion = 0))");
+      }
     }
 
     sqlParts.push('GROUP BY u.id ORDER BY u.id DESC');
@@ -849,7 +867,7 @@ async function deleteOwnerPayment(req, res) {
 async function listRecentLoggedUsers(req, res) {
   try {
     const rows = await db.query(
-      "SELECT id, firstName, lastName, username, role, email, contact, lastLoginAt FROM `user` WHERE lastLoginAt IS NOT NULL ORDER BY lastLoginAt DESC LIMIT 10"
+      "SELECT id, firstName, lastName, username, role, email, contact, lastLoginAt FROM `user` WHERE lastLoginAt >= DATE_SUB(NOW(3), INTERVAL 24 HOUR) ORDER BY lastLoginAt DESC"
     );
     return res.json({ data: rows });
   } catch (error) {
