@@ -117,7 +117,7 @@ async function createBooking(req, res) {
     if (ownerId && room.ownerId !== ownerId) {
       return res.status(403).json({ message: 'Room does not belong to your hotel' });
     }
-    if (propertyId && room.propertyId !== propertyId) {
+    if (role === 'staff' && propertyId && room.propertyId !== propertyId) {
       return res.status(403).json({ message: 'Room does not belong to your property' });
     }
 
@@ -173,7 +173,7 @@ async function updateBooking(req, res) {
       if (ownerId && room.ownerId !== ownerId) {
         return res.status(403).json({ message: 'Room does not belong to your hotel' });
       }
-      if (propertyId && room.propertyId !== propertyId) {
+      if (role === 'staff' && propertyId && room.propertyId !== propertyId) {
         return res.status(403).json({ message: 'Room does not belong to your property' });
       }
       if (role === 'admin' && booking.ownerId !== room.ownerId) {
