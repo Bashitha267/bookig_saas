@@ -24,7 +24,7 @@ async function listBookings(req, res) {
 
     let sql = `
       SELECT b.*, r.roomNumber, r.roomType,
-             COALESCE(b.bookedRoomPrice, r.price) AS roomPrice,
+             b.bookedRoomPrice AS roomPrice,
              r.propertyId AS propertyId, p.name AS propertyName
       FROM booking b
       LEFT JOIN room r ON b.roomId = r.id
@@ -63,7 +63,7 @@ async function getBooking(req, res) {
     const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId;
     let sql = `
       SELECT b.*, r.roomNumber, r.roomType,
-             COALESCE(b.bookedRoomPrice, r.price) AS roomPrice,
+             b.bookedRoomPrice AS roomPrice,
              r.propertyId AS propertyId, p.name AS propertyName
       FROM booking b
       LEFT JOIN room r ON b.roomId = r.id
