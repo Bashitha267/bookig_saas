@@ -23,7 +23,9 @@ async function listBookings(req, res) {
     const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId;
 
     let sql = `
-      SELECT b.*, r.roomNumber, r.roomType, r.price AS roomPrice, r.propertyId AS propertyId, p.name AS propertyName
+      SELECT b.*, r.roomNumber, r.roomType,
+             COALESCE(b.bookedRoomPrice, r.price) AS roomPrice,
+             r.propertyId AS propertyId, p.name AS propertyName
       FROM booking b
       LEFT JOIN room r ON b.roomId = r.id
       LEFT JOIN property p ON r.propertyId = p.id
@@ -60,7 +62,9 @@ async function getBooking(req, res) {
     const requestedPropertyId = req.query.propertyId ? Number(req.query.propertyId) : null;
     const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId;
     let sql = `
-      SELECT b.*, r.roomNumber, r.roomType, r.price AS roomPrice, r.propertyId AS propertyId, p.name AS propertyName
+      SELECT b.*, r.roomNumber, r.roomType,
+             COALESCE(b.bookedRoomPrice, r.price) AS roomPrice,
+             r.propertyId AS propertyId, p.name AS propertyName
       FROM booking b
       LEFT JOIN room r ON b.roomId = r.id
       LEFT JOIN property p ON r.propertyId = p.id
@@ -95,7 +99,9 @@ async function createBooking(req, res) {
     guestContact,
     guestNic,
     checkInDate,
+    checkInTime,
     checkOutDate,
+    checkOutTime,
     adults,
     children,
     status,
@@ -109,7 +115,8 @@ async function createBooking(req, res) {
 
   try {
     const { ownerId, role, propertyId, userId } = await resolveOwnerContext(req);
-    const roomRows = await db.query('SELECT id, ownerId, propertyId FROM room WHERE id = ? LIMIT 1', [roomId]);
+    // Fetch full room details including current price to snapshot at booking time
+    const roomRows = await db.query('SELECT id, ownerId, propertyId, price FROM room WHERE id = ? LIMIT 1', [roomId]);
     const room = roomRows.length ? roomRows[0] : null;
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
@@ -124,18 +131,28 @@ async function createBooking(req, res) {
     const insertOwnerId = role === 'admin' ? room.ownerId : ownerId || room.ownerId;
     const createdBy = userId || room.ownerId;
 
+    // Snapshot the room price at booking creation — future room price changes won't affect this booking
+    const snapshotPrice = Number(room.price || 0);
+
+    // Default check-in time: 14:00 (2:00 PM), check-out time: 11:00 (11:00 AM)
+    const resolvedCheckInTime  = checkInTime  || '14:00:00';
+    const resolvedCheckOutTime = checkOutTime || '11:00:00';
+
     const result = await db.execute(
       `INSERT INTO booking
-        (ownerId, roomId, guestName, guestContact, guestNic, checkInDate, checkOutDate, adults, children, status, notes, createdBy, discount, createdAt, updatedAt)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())`,
+        (ownerId, roomId, bookedRoomPrice, guestName, guestContact, guestNic, checkInDate, checkInTime, checkOutDate, checkOutTime, adults, children, status, notes, createdBy, discount, createdAt, updatedAt)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())`,
       [
         insertOwnerId,
         roomId,
+        snapshotPrice,
         guestName,
         guestContact,
         guestNic || null,
         checkInDate,
+        resolvedCheckInTime,
         checkOutDate,
+        resolvedCheckOutTime,
         adults || 1,
         children || 0,
         status || 'pending',
@@ -187,7 +204,9 @@ async function updateBooking(req, res) {
       'guestContact',
       'guestNic',
       'checkInDate',
+      'checkInTime',
       'checkOutDate',
+      'checkOutTime',
       'adults',
       'children',
       'status',

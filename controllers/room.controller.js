@@ -19,8 +19,10 @@ async function listRooms(req, res) {
     const requestedPropertyId = req.query.propertyId ? Number(req.query.propertyId) : null;
     const scopePropertyId = role === 'staff' ? propertyId : requestedPropertyId;
 
-    const checkInDate = req.query.checkInDate || null;
+    const checkInDate  = req.query.checkInDate  || null;
+    const checkInTime  = req.query.checkInTime  || null;
     const checkOutDate = req.query.checkOutDate || null;
+    const checkOutTime = req.query.checkOutTime || null;
     const hasDates = checkInDate && checkOutDate;
 
     if (hasDates) {
@@ -50,14 +52,17 @@ async function listRooms(req, res) {
     }
 
     if (hasDates) {
+      // Use full datetime overlap so a room freed at 10:00 AM is available for an 11:00 AM check-in on the same day.
+      // COALESCE falls back to standard hotel times if the columns don't exist yet (migration not run).
       conditions.push(`NOT EXISTS (
         SELECT 1
         FROM booking b
         WHERE b.roomId = r.id
           AND b.status IN ('pending','confirmed','checked-in')
-          AND NOT (b.checkOutDate <= ? OR b.checkInDate >= ?)
+          AND TIMESTAMP(b.checkOutDate, COALESCE(b.checkOutTime, '11:00:00')) > TIMESTAMP(?, ?)
+          AND TIMESTAMP(b.checkInDate,  COALESCE(b.checkInTime,  '14:00:00')) < TIMESTAMP(?, ?)
       )`);
-      params.push(checkInDate, checkOutDate);
+      params.push(checkInDate, checkInTime || '14:00:00', checkOutDate, checkOutTime || '11:00:00');
     }
 
     if (conditions.length) {
