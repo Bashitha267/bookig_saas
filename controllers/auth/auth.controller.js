@@ -147,21 +147,41 @@ async function setCurrentProperty(req, res) {
   try {
     const rows = await db.query('SELECT id, role FROM `user` WHERE id = ? LIMIT 1', [req.user.userId]);
     const user = rows && rows.length ? rows[0] : null;
-    if (!user || user.role !== 'owner') {
-      return res.status(403).json({ message: 'Only owner can set current property' });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
     }
 
-    const propertyRows = await db.query('SELECT id, status FROM property WHERE id = ? AND ownerId = ? LIMIT 1', [propertyId, user.id]);
-    if (!propertyRows.length) {
-      return res.status(404).json({ message: 'Property not found' });
-    }
+    if (user.role === 'owner') {
+      const propertyRows = await db.query('SELECT id, status FROM property WHERE id = ? AND ownerId = ? LIMIT 1', [propertyId, user.id]);
+      if (!propertyRows.length) {
+        return res.status(404).json({ message: 'Property not found' });
+      }
 
-    if (propertyRows[0].status === 'blocked') {
-      return res.status(403).json({ message: 'This property has been blocked by the admin' });
-    }
+      if (propertyRows[0].status === 'blocked') {
+        return res.status(403).json({ message: 'This property has been blocked by the admin' });
+      }
 
-    await db.execute('UPDATE `user` SET currentPropertyId = ? WHERE id = ?', [propertyId, user.id]);
-    return res.status(200).json({ message: 'Current property updated', currentPropertyId: propertyId });
+      await db.execute('UPDATE `user` SET currentPropertyId = ? WHERE id = ?', [propertyId, user.id]);
+      return res.status(200).json({ message: 'Current property updated', currentPropertyId: propertyId });
+    } else if (user.role === 'staff') {
+      // Check if this property is assigned to this staff member
+      const staffPropRows = await db.query(
+        'SELECT sp.propertyId, p.status FROM staff_properties sp JOIN property p ON sp.propertyId = p.id WHERE sp.staffId = ? AND sp.propertyId = ? LIMIT 1',
+        [user.id, propertyId]
+      );
+      if (!staffPropRows.length) {
+        return res.status(404).json({ message: 'Assigned property not found' });
+      }
+
+      if (staffPropRows[0].status === 'blocked') {
+        return res.status(403).json({ message: 'This property has been blocked by the admin' });
+      }
+
+      await db.execute('UPDATE `user` SET currentPropertyId = ? WHERE id = ?', [propertyId, user.id]);
+      return res.status(200).json({ message: 'Current property updated', currentPropertyId: propertyId });
+    } else {
+      return res.status(403).json({ message: 'Unauthorized role to set current property' });
+    }
   } catch (error) {
     return res.status(500).json({ message: 'Failed to update current property', error: error.message });
   }
