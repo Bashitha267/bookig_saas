@@ -91,7 +91,7 @@ async function createPayment(req, res) {
   }
 
   try {
-    const { ownerId, role } = await resolveOwnerContext(req);
+    const { ownerId, role, userId } = await resolveOwnerContext(req);
     const bookingRows = await db.query('SELECT id, ownerId FROM booking WHERE id = ? LIMIT 1', [bookingId]);
     const booking = bookingRows.length ? bookingRows[0] : null;
     if (!booking) {
