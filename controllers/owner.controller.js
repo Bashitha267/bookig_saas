@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('../lib/db');
+const { resolveOwnerContext } = require('../lib/ownership');
 
 async function getMyBilling(req, res) {
   const ownerId = req.user.userId;
@@ -162,9 +163,10 @@ async function getSystemStatus(req, res) {
 }
 
 async function getGuests(req, res) {
-  const ownerId = req.user.userId;
-  const { q, startDate, endDate } = req.query;
   try {
+    const { ownerId, role, propertyId } = await resolveOwnerContext(req);
+    const { q, startDate, endDate } = req.query;
+
     const sqlParts = [
       `SELECT b.id, b.guestName, b.guestContact, b.guestNic, b.checkInDate, b.checkOutDate,
               b.adults, b.children, b.status, b.notes, b.createdAt,
@@ -176,6 +178,11 @@ async function getGuests(req, res) {
       'WHERE b.ownerId = ?',
     ];
     const params = [ownerId];
+
+    if (role === 'staff' && propertyId) {
+      sqlParts.push('AND r.propertyId = ?');
+      params.push(propertyId);
+    }
 
     if (q) {
       const like = `%${q}%`;
@@ -201,4 +208,22 @@ async function getGuests(req, res) {
   }
 }
 
-module.exports = { getMyBilling, getMyPayments, submitPayment, getSystemStatus, getGuests };
+async function getStaffActivity(req, res) {
+  try {
+    const { ownerId } = await resolveOwnerContext(req);
+    const rows = await db.query(
+      `SELECT sa.id, sa.staffId, sa.action, sa.details, sa.createdAt,
+              u.firstName AS staffFirstName, u.lastName AS staffLastName, u.username AS staffUsername
+       FROM staff_activity sa
+       JOIN \`user\` u ON sa.staffId = u.id
+       WHERE sa.ownerId = ?
+       ORDER BY sa.id DESC`,
+      [ownerId]
+    );
+    return res.json({ data: rows });
+  } catch (error) {
+    return res.status(500).json({ message: 'Failed to load staff activity log', error: error.message });
+  }
+}
+
+module.exports = { getMyBilling, getMyPayments, submitPayment, getSystemStatus, getGuests, getStaffActivity };

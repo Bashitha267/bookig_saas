@@ -1,15 +1,16 @@
 const express = require('express');
-const { getMyBilling, getMyPayments, submitPayment, getSystemStatus, getGuests } = require('../controllers/owner.controller');
+const { getMyBilling, getMyPayments, submitPayment, getSystemStatus, getGuests, getStaffActivity } = require('../controllers/owner.controller');
 const { authenticate, authorizeRoles } = require('../middleware/auth.middleware');
 
 const router = express.Router();
 
-router.use(authenticate, authorizeRoles('owner'));
+router.use(authenticate);
 
-router.get('/status', getSystemStatus);
-router.get('/billing', getMyBilling);
-router.get('/payments', getMyPayments);
-router.post('/payments', submitPayment);
-router.get('/guests', getGuests);
+router.get('/status', authorizeRoles('owner'), getSystemStatus);
+router.get('/billing', authorizeRoles('owner'), getMyBilling);
+router.get('/payments', authorizeRoles('owner'), getMyPayments);
+router.post('/payments', authorizeRoles('owner'), submitPayment);
+router.get('/guests', authorizeRoles('owner', 'staff'), getGuests);
+router.get('/staff-activity', authorizeRoles('owner'), getStaffActivity);
 
 module.exports = router;

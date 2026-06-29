@@ -15,12 +15,12 @@ function buildUpdate(fields, body) {
 
 async function listProperties(req, res) {
   try {
-    const { ownerId, role, propertyId } = await resolveOwnerContext(req);
+    const { ownerId, role, propertyId, userId } = await resolveOwnerContext(req);
     let sql = 'SELECT p.*, u.firstName AS ownerFirstName, u.lastName AS ownerLastName, u.username AS ownerUsername FROM property p LEFT JOIN `user` u ON u.id = p.ownerId';
     const params = [];
-    if (role === 'staff' && propertyId) {
-      sql += " WHERE p.id = ? AND p.status <> 'blocked'";
-      params.push(propertyId);
+    if (role === 'staff') {
+      sql += " JOIN staff_properties sp ON p.id = sp.propertyId WHERE sp.staffId = ? AND p.status <> 'blocked'";
+      params.push(userId);
     } else if (ownerId) {
       sql += " WHERE p.ownerId = ? AND p.status <> 'blocked'";
       params.push(ownerId);

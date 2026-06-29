@@ -14,8 +14,8 @@ router.use(authenticate);
 
 router.get('/', authorizeRoles('owner', 'admin', 'staff'), listPayments);
 router.get('/:id', authorizeRoles('owner', 'admin', 'staff'), getPayment);
-router.post('/', authorizeRoles('owner', 'admin'), createPayment);
-router.put('/:id', authorizeRoles('owner', 'admin'), updatePayment);
+router.post('/', authorizeRoles('owner', 'admin', 'staff'), createPayment);
+router.put('/:id', authorizeRoles('owner', 'admin', 'staff'), updatePayment);
 router.delete('/:id', authorizeRoles('owner', 'admin'), deletePayment);
 
 module.exports = router;

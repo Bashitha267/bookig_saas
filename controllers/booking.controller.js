@@ -1,5 +1,6 @@
 const db = require('../lib/db');
 const { resolveOwnerContext } = require('../lib/ownership');
+const { logStaffActivity } = require('../lib/activity');
 
 function buildUpdate(fields, body) {
   const updates = [];
@@ -162,6 +163,8 @@ async function createBooking(req, res) {
       ]
     );
 
+    await logStaffActivity(userId, role, 'Create Booking', `Created booking for guest ${guestName} (ID: ${result.insertId})`);
+
     return res.status(201).json({ message: 'Booking created', id: result.insertId });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to create booking', error: error.message });
@@ -224,6 +227,8 @@ async function updateBooking(req, res) {
     const sql = `UPDATE booking SET ${updates.join(', ')}, updatedAt = NOW() WHERE id = ?`;
     params.push(id);
     await db.execute(sql, params);
+
+    await logStaffActivity(req.user.userId, req.user.role, 'Update Booking', `Updated booking ID: ${id} with status: ${req.body.status || 'N/A'}`);
 
     return res.json({ message: 'Booking updated' });
   } catch (error) {

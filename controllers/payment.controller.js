@@ -1,5 +1,6 @@
 const db = require('../lib/db');
 const { resolveOwnerContext } = require('../lib/ownership');
+const { logStaffActivity } = require('../lib/activity');
 
 function buildUpdate(fields, body) {
   const updates = [];
@@ -121,6 +122,8 @@ async function createPayment(req, res) {
       ]
     );
 
+    await logStaffActivity(userId, role, 'Create Payment', `Posted payment of ${amount} ${currency || 'LKR'} for booking ID: ${bookingId} (ID: ${result.insertId})`);
+
     return res.status(201).json({ message: 'Payment created', id: result.insertId });
   } catch (error) {
     return res.status(500).json({ message: 'Failed to create payment', error: error.message });
@@ -151,6 +154,8 @@ async function updatePayment(req, res) {
     const sql = `UPDATE payment SET ${updates.join(', ')}, updatedAt = NOW() WHERE id = ?`;
     params.push(id);
     await db.execute(sql, params);
+
+    await logStaffActivity(req.user.userId, req.user.role, 'Update Payment', `Updated payment ID: ${id}`);
 
     return res.json({ message: 'Payment updated' });
   } catch (error) {
